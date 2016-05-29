@@ -1,0 +1,36 @@
+{
+  "name": "gdrive_ftp",
+  "version": "0.0.1-beta",
+  "description": "FTP server streaming to GDrive",
+  "main": "main.js",
+  "scripts": {
+    "start": "node main.js",
+    "test": "jshint **.js --exclude 'node_modules,apidoc,newrelic.js'",
+    "apidocs": "apidoc -i routes/ -o apidoc/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@bitbucket.org/valkyrnstudios/inequity.git"
+  },
+  "bin": {
+    "gdrive_ftp": "./main.js"
+  },
+  "publishConfig": {
+    "registry": "http://npm.valkyrnstudios.net:4873/"
+  },
+  "engine": "node >= 4.2.0",
+  "author": "Valkyrnstudios",
+  "contributors": [
+    {
+      "name": "Joel Garboden",
+      "email": "joel@valkyrnstudios.net"
+    }
+  ],
+  "license": "GPL-3.0",
+  "homepage": "https://bitbucket.org/valkyrnstudios/inequity#readme",
+  "jshintConfig": {},
+  "dependencies": {
+    "bluebird": "^3.2.2",
+    "ftpd": "^0.2.15"
+  }
+}
