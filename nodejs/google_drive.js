@@ -14,12 +14,15 @@ var authenticate = function _authenticate() {
   var authorization_token = process.argv[2];
   try {
     var tokens = JSON.parse(fs.readFileSync('token.cache').toString().trim());
-    
-    return Promise.resolve(tokens);
+
+    oauth2Client.setCredentials(tokens);
+    var drive = google.drive({ version: 'v2', auth: oauth2Client });
+
+    return Promise.resolve(drive);
 
   } catch (e) {
     console.error("Unable to parse token.cache, authenticating");
-    
+
     return new Promise(function (resolve, reject) {
       var url = oauth2Client.generateAuthUrl(auth_options);
 
@@ -28,7 +31,7 @@ var authenticate = function _authenticate() {
     .then(function _thenGenerateAuthUrl(url){
       return new Promise(function (resolve, reject){
         console.log(url);
-        
+
         var rl = readline.createInterface({
           input: process.stdin,
           output: process.stdout
@@ -42,7 +45,7 @@ var authenticate = function _authenticate() {
     })
     .then(function _thenAuthTokenPrompt(auth_token){
       console.log("Auth token ", auth_token);
-      
+
       return new Promise(function (resolve, reject){
         oauth2Client.getToken(auth_token, function(err, tokens) {
           if(err) return reject(err);
@@ -53,35 +56,43 @@ var authenticate = function _authenticate() {
           return resolve(tokens);
         });
       });
+    })
+    .then(function _thenGotTokens(tokens){
+      oauth2Client.setCredentials(tokens);
+      var drive = google.drive({ version: 'v2', auth: oauth2Client });
+
+      return Promise.resolve(drive);
     });
 
   }
 }
 
-return authenticate();
-/*
-if (tokens) {
-  console.log("Tokens parsed");
-  oauth2Client.setCredentials(tokens);
+var upload = function _upload(path, filename) {
+  return new Promise(function (resolve, reject) {
+    try {
+      drive.files.insert({
+        resource: {
+          title: path.basename(file_path),
+        },
+        media: {
+          body: datastream
+        },
+      }, function(err, response) {
+        if (err) {
+          return resolve("Unable to upload file" + file_path);
+        }
+        GLOBAL.logger.info("Uploaded file", file_path);
 
-  var drive = google.drive({ version: 'v2', auth: oauth2Client });
-  drive.files.list({
-    maxResults: 10,
-    q: '',
-    fields: 'items(id,title,description,downloadUrl)'
-    },
-    function(err, resp) {
-      if (err) {
-        console.log("Error");
-        return err;
-      }
-      
-      console.log("Success", resp);
-    });
-
-} else {
-  console.log("No tokens obtained in time, try launching again");
+        return resolve(file_path);
+      });
+    } catch (e) {
+      GLOBAL.logger.warn("Problem uploading " + file_path, { error: e, stack: e.stack });
+      return resolve("Problem uploading " + file_path);
+    }
+  });
 }
 
-module.exports = config;
-*/
+module.exports = { 
+  authenticate: authenticate,
+  upload: upload
+};
