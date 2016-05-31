@@ -1,9 +1,9 @@
 #!/usr/bin/env python2
-# coding: utf-8
+# https://gist.github.com/scturtle/1035886
 
 import os,socket,threading,time
 from pprint import pprint
-#import traceback
+import traceback
 
 allow_delete = False
 local_ip = socket.gethostbyname(socket.gethostname())
@@ -33,7 +33,7 @@ class FTPserverThread(threading.Thread):
                     func(cmd)
                 except Exception,e:
                     print 'ERROR:',e
-                    #traceback.print_exc()
+                    traceback.print_exc()
                     self.conn.send('500 Sorry.\r\n')
 
     def SYST(self,cmd):
@@ -57,18 +57,26 @@ class FTPserverThread(threading.Thread):
         self.conn.send('200 Binary mode.\r\n')
 
     def CDUP(self,cmd):
+        self.conn.send('502 Not implemented yet.\r\n')
+        '''
         if not os.path.samefile(self.cwd,self.basewd):
             #learn from stackoverflow
             self.cwd=os.path.abspath(os.path.join(self.cwd,'..'))
         self.conn.send('200 OK.\r\n')
+        '''
     def PWD(self,cmd):
+        self.conn.send('502 Not implemented yet.\r\n')
+        '''
         cwd=os.path.relpath(self.cwd,self.basewd)
         if cwd=='.':
             cwd='/'
         else:
             cwd='/'+cwd
         self.conn.send('257 \"%s\"\r\n' % cwd)
+        '''
     def CWD(self,cmd):
+        self.conn.send('502 Not implemented yet.\r\n')
+        '''
         chwd=cmd[4:-2]
         if chwd=='/':
             self.cwd=self.basewd
@@ -77,7 +85,8 @@ class FTPserverThread(threading.Thread):
         else:
             self.cwd=os.path.join(self.cwd,chwd)
         self.conn.send('250 OK.\r\n')
-
+        '''
+        
     def PORT(self,cmd):
         if self.pasv_mode:
             self.servsock.close()
@@ -110,7 +119,6 @@ class FTPserverThread(threading.Thread):
         if self.pasv_mode:
             self.servsock.close()
 
-
     def LIST(self,cmd):
         self.conn.send('150 Here comes the directory listing.\r\n')
         print 'list:', self.cwd
@@ -128,41 +136,60 @@ class FTPserverThread(threading.Thread):
         self.conn.send('226 Directory send OK.\r\n')
 
     def MKD(self,cmd):
+        self.conn.send('502 Not implemented yet.\r\n')
+        '''
         dn=os.path.join(self.cwd,cmd[4:-2])
         os.mkdir(dn)
         self.conn.send('257 Directory created.\r\n')
-
+        '''
+        
     def RMD(self,cmd):
+        self.conn.send('502 Not implemented yet.\r\n')
+        '''
         dn=os.path.join(self.cwd,cmd[4:-2])
         if allow_delete:
             os.rmdir(dn)
             self.conn.send('250 Directory deleted.\r\n')
         else:
             self.conn.send('450 Not allowed.\r\n')
+        '''
 
     def DELE(self,cmd):
+        self.conn.send('502 Not implemented yet.\r\n')
+        '''
         fn=os.path.join(self.cwd,cmd[5:-2])
         if allow_delete:
             os.remove(fn)
             self.conn.send('250 File deleted.\r\n')
         else:
             self.conn.send('450 Not allowed.\r\n')
-
+        '''
     def RNFR(self,cmd):
+        self.conn.send('502 Not implemented yet.\r\n')
+        '''
         self.rnfn=os.path.join(self.cwd,cmd[5:-2])
         self.conn.send('350 Ready.\r\n')
-
+        '''
+        
     def RNTO(self,cmd):
+        self.conn.send('502 Not implemented yet.\r\n')
+        '''
         fn=os.path.join(self.cwd,cmd[5:-2])
         os.rename(self.rnfn,fn)
         self.conn.send('250 File renamed.\r\n')
-
+        '''
+        
     def REST(self,cmd):
+        self.conn.send('502 Not implemented yet.\r\n')
+        '''
         self.pos=int(cmd[5:-2])
         self.rest=True
         self.conn.send('250 File position reseted.\r\n')
-
+        '''
+        
     def RETR(self,cmd):
+        self.conn.send('502 Not implemented yet.\r\n')
+        '''
         fn=os.path.join(self.cwd,cmd[5:-2])
         #fn=os.path.join(self.cwd,cmd[5:-2]).lstrip('/')
         print 'Downlowding:',fn
@@ -182,10 +209,11 @@ class FTPserverThread(threading.Thread):
         fi.close()
         self.stop_datasock()
         self.conn.send('226 Transfer complete.\r\n')
-
+        '''
+        
     def STOR(self,cmd):
         fn=os.path.join(self.cwd,cmd[5:-2])
-        print 'Uplaoding:',fn
+        print 'Uploading:',fn
         if self.mode=='I':
             fo=open(fn,'wb')
         else:
@@ -198,7 +226,12 @@ class FTPserverThread(threading.Thread):
             fo.write(data)
         fo.close()
         self.stop_datasock()
-        self.conn.send('226 Transfer complete.\r\n')
+        
+        print 'FTP transfer complete, uploading to Drive'
+        
+        self.drive.uploadFile(fn)
+        
+        self.conn.send('226 Drive Transfer complete.\r\n')
 
 class FTPserver(threading.Thread):
     def __init__(self, drive):
@@ -216,11 +249,3 @@ class FTPserver(threading.Thread):
 
     def stop(self):
         self.sock.close()
-
-if __name__=='__main__':
-    ftp=FTPserver()
-    ftp.daemon=True
-    ftp.start()
-    print 'On', local_ip, ':', local_port
-    raw_input('Enter to end...\n')
-    ftp.stop()

@@ -1,12 +1,15 @@
 from __future__ import print_function
 import httplib2
 import os
+import io
 
 from datetime import datetime
 from apiclient import discovery
 import oauth2client
 from oauth2client import client
 from oauth2client import tools
+from mimetypes import guess_type
+from apiclient.http import MediaIoBaseUpload
 
 try:
   import argparse
@@ -77,6 +80,23 @@ def listFiles(parentDirId=getRoot()):
       
   return found_files
 
+def uploadFile(local_filename):
+  credentials = get_credentials()
+  http = credentials.authorize(httplib2.Http())
+  service = discovery.build('drive', 'v3', http=http)
+
+  fo=io.open(local_filename, 'rb')
+  mime_type = guess_type(local_filename)[0]
+  mime_type = mime_type if mime_type else 'text/plain'
+  
+  body = {
+    'name': os.path.basename(local_filename),
+    'mimeType': mime_type
+  }
+  media = MediaIoBaseUpload(fo, mimetype=mime_type)#, chunksize=1024, resumable=True)
+  response = service.files().create(body=body, media_body=media).execute()
+  
+  print(response)
 
 class GDrive_File(object):
   def __init__(self, name=None, id=None, mimeType=None, size=None, parents=None, createdTime=None):
