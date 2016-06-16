@@ -79,7 +79,7 @@ def listFiles(parentDirId=getRoot()):
       ))
       
   return found_files
-
+  
 def uploadFile(local_filename):
   credentials = get_credentials()
   http = credentials.authorize(httplib2.Http())
@@ -93,7 +93,7 @@ def uploadFile(local_filename):
     'name': os.path.basename(local_filename),
     'mimeType': mime_type
   }
-  media = MediaIoBaseUpload(fo, mimetype=mime_type)#, chunksize=1024, resumable=True)
+  media = MediaIoBaseUpload(fo, mimetype=mime_type)
   response = service.files().create(body=body, media_body=media).execute()
   
   print(response)
@@ -105,8 +105,9 @@ class GDrive_File(object):
     self.mimeType = mimeType
     self.isDirectory = mimeType == 'application/vnd.google-apps.folder'
     self.size = size
-    self.parents = parents
+    self.parents = parents[0]
     self.createdTime = datetime.strptime(createdTime, '%Y-%m-%dT%H:%M:%S.%fZ')
+    
   def __str__(self):
     return "{0},{1},{2},{3},{4},{5}".format(self.name, self.id, self.isDirectory, self.mimeType, self.parents, self.createdTime)
     
