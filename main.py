@@ -3,13 +3,13 @@ import socket
 import ftpserver
 import drive
 
-local_ip = socket.gethostbyname(socket.gethostname())
+local_ip = '0.0.0.0' #socket.gethostbyname(socket.gethostname())
 ftp_port = 21
 
 if __name__=='__main__':
   drive.get_credentials()
 
-  ftp=ftpserver.FTPserver(drive)
+  ftp=ftpserver.FTPserver(drive, local_ip, ftp_port)
   ftp.daemon=True
   ftp.start()
   print 'On', local_ip, ':', ftp_port

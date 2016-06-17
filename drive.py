@@ -50,14 +50,23 @@ def getRoot():
 
   results = service.files().get( fileId='root' ).execute()
 
-  return results['id']
+  root_dir = results
+  
+  return GDrive_File(
+      name=root_dir['name'],
+      id=root_dir['id'],
+      mimeType=root_dir['mimeType'],
+      size=root_dir.get('size', 1),
+      parents=root_dir['parents'],
+      createdTime=root_dir['createdTime']
+    )
 
 def listFiles(parentDirId=getRoot()):
 
   credentials = get_credentials()
   http = credentials.authorize(httplib2.Http())
   service = discovery.build('drive', 'v3', http=http)
-  print("Finding files with parent: {0}".format(parentDirId))
+
   found_files = []
 
   results = service.files().list(
@@ -66,19 +75,61 @@ def listFiles(parentDirId=getRoot()):
     q="'{0}' in parents and trashed=false".format(parentDirId)
     ).execute()
 
-  items = results.get('files', [])
-  if items:
-    for item in items:
-      found_files.append(GDrive_File(
-        name=item['name'],
-        id=item['id'],
-        mimeType=item['mimeType'],
-        size=item.get('size', 1),
-        parents=item['parents'],
-        createdTime=item['createdTime']
-      ))
+  for item in results.get('files', []):
+    found_files.append(GDrive_File(
+      name=item['name'],
+      id=item['id'],
+      mimeType=item['mimeType'],
+      size=item.get('size', 1),
+      parents=item['parents'],
+      createdTime=item['createdTime']
+    ))
       
   return found_files
+
+def getFolderByPath(path, cwd_id):
+
+  if path[0:1] == '/':
+    top_dir = getRoot()
+  else:
+    top_dir = cwd_id
+    
+  credentials = get_credentials()
+  http = credentials.authorize(httplib2.Http())
+  service = discovery.build('drive', 'v3', http=http)
+
+  path_array = path.split('/')
+  
+  for path in path_array:
+  
+    if path == '':
+      continue
+
+    results = service.files().list(
+      pageSize=2,
+      fields="files(id, name, mimeType, size, parents, createdTime)",
+      q="'{0}' in parents and trashed=false and mimeType='application/vnd.google-apps.folder' and name='{1}'".format(top_dir, path)
+      ).execute().get('files', [])
+
+    if len(results) != 1:
+      return GDrive_File()
+
+    if path == path_array[-1]:
+      folder = results[0]
+      found_folder = GDrive_File(
+        name=folder['name'],
+        id=folder['id'],
+        mimeType=folder['mimeType'],
+        size=folder.get('size', 1),
+        parents=folder['parents'],
+        createdTime=folder['createdTime']
+      )
+      print("\n\nReturning folder", found_folder.__dict__)
+      
+      return found_folder
+    else:
+      top_dir = results[0]['id']
+
   
 def uploadFile(local_filename):
   credentials = get_credentials()
@@ -105,11 +156,11 @@ class GDrive_File(object):
     self.mimeType = mimeType
     self.isDirectory = mimeType == 'application/vnd.google-apps.folder'
     self.size = size
-    self.parents = parents[0]
-    self.createdTime = datetime.strptime(createdTime, '%Y-%m-%dT%H:%M:%S.%fZ')
-    
+    self.parents = parents[0] if parents != None else []
+    self.createdTime = datetime.strptime(createdTime, '%Y-%m-%dT%H:%M:%S.%fZ') if createdTime != None else None
+
   def __str__(self):
-    return "{0},{1},{2},{3},{4},{5}".format(self.name, self.id, self.isDirectory, self.mimeType, self.parents, self.createdTime)
+    return str(self.__dict__)
     
   def __repr__(self):
     return self.__str__()

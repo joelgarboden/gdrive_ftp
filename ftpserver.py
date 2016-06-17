@@ -6,16 +6,11 @@ from pprint import pprint
 import traceback
 
 allow_delete = False
-local_ip = socket.gethostbyname(socket.gethostname())
-local_port = 21
-currdir=os.path.abspath('.')
 
 class FTPserverThread(threading.Thread):
     def __init__(self,(conn,addr), drive, state):
       self.conn=conn
       self.addr=addr
-      self.basewd=currdir
-      self.cwd=self.basewd
       self.rest=False
       self.pasv_mode=False
       self.drive=drive
@@ -25,10 +20,9 @@ class FTPserverThread(threading.Thread):
     def run(self):
       self.conn.send('220 Welcome!\r\n')
       while True:
-        if self.state.root_id == None:
-          self.state.root_id = self.drive.getRoot()
-          self.state.cwd_id = self.state.root_id
-          self.state.cwd_path = '/'
+        if self.state.root_object == None:
+          self.state.root_object = self.drive.getRoot()
+          self.state.cwd_id = self.state.root_object
           print self.state
 
         cmd=self.conn.recv(256)
@@ -66,8 +60,7 @@ class FTPserverThread(threading.Thread):
       self.conn.send('200 OK.\r\n')
 
     def TYPE(self,cmd):
-      self.mode=cmd[5]
-      self.conn.send('200 Binary mode.\r\n')
+      self.conn.send('200 Binary mode only.\r\n')
 
     def CDUP(self,cmd):
       self.conn.send('502 Not implemented yet.\r\n')
@@ -82,19 +75,19 @@ class FTPserverThread(threading.Thread):
       self.conn.send('257 \"%s\"\r\n' % self.state.cwd_path)
 
     def CWD(self,cmd):
-      chwd=cmd[4:-2].split('/')
+      path=cmd[4:-2]
+      
+      if path == '/':
+        cd_id = self.state.root_object
+      else:
+        new_wd = self.drive.getFolderByPath(path, self.state.cwd_id)
+        cd_id = new_wd.id
 
-      for i in chwd:
-        dirs_found = 0
-        for j in self.drive.listFiles(self.state.cwd_id):
-          if j.name == i:
-            self.state.updateCWD(j)
-            dirs_found += 1
-
-        if dirs_found != 1:
-          self.conn.send('550 Unable to find directory \"%s\"\r\n' % i)
-
-      self.conn.send('250 OK.\r\n')
+      if cd_id != None:
+        self.state.updateCWD(new_wd, path)
+        self.conn.send('250 OK.\r\n')
+      else:
+        self.conn.send('550 Unable to find directory \"%s\"\r\n' % path)
 
     def PORT(self,cmd):
       if self.pasv_mode:
@@ -108,7 +101,7 @@ class FTPserverThread(threading.Thread):
     def PASV(self,cmd): # from http://goo.gl/3if2U
       self.pasv_mode = True
       self.servsock = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-      self.servsock.bind((local_ip,0))
+      self.servsock.bind(('0.0.0.0',0))
       self.servsock.listen(1)
       ip, port = self.servsock.getsockname()
       print 'open', ip, port
@@ -149,10 +142,23 @@ class FTPserverThread(threading.Thread):
 
     def MKD(self,cmd):
       self.conn.send('502 Not implemented yet.\r\n')
+
+      chwd=cmd[4:-2].split('/')
+
+      for i in chwd:
+        dirs_found = 0
+        for j in self.drive.listFiles(self.state.cwd_id):
+          if j.name == i:
+            self.state.updateCWD(j)
+            dirs_found += 1
+
+        if dirs_found != 0:
+
+          self.conn.send('257 Directory created.\r\n')
       '''
       dn=os.path.join(self.cwd,cmd[4:-2])
       os.mkdir(dn)
-      self.conn.send('257 Directory created.\r\n')
+
       '''
 
     def RMD(self,cmd):
@@ -225,12 +231,9 @@ class FTPserverThread(threading.Thread):
       '''
 
     def STOR(self,cmd):
-      fn=os.path.join(self.cwd,cmd[5:-2])
+      fn='/var/tmp' + cmd[5:-2]
       print 'Uploading:',fn
-      if self.mode=='I':
-        fo=open(fn,'wb')
-      else:
-        fo=open(fn,'w')
+      fo=open(fn,'wb')
       self.conn.send('150 Opening data connection.\r\n')
       self.start_datasock()
       while True:
@@ -247,28 +250,28 @@ class FTPserverThread(threading.Thread):
       self.conn.send('226 Drive Transfer complete.\r\n')
 
 class FTPstate(object):
-  def __init__(self, cwd_path=None, cwd_name=None, cwd_id=None, root_id=None):
+  def __init__(self, root_object, cwd_path='', cwd_name='', cwd_id=None):
     self.cwd_id = cwd_id
     self.cwd_path = cwd_path
     self.cwd_name = cwd_name
-    self.root_id = root_id
+    self.root_object = root_object
 
-  def updateCWD(self, gdrive_object):
+  def updateCWD(self, gdrive_object, path):
     self.cwd_id = gdrive_object.id
     self.cwd_name = gdrive_object.name
-    self.cwd_path += gdrive_object.name + '/'
+    self.cwd_path = self.cwd_path + '/' + path if path[0] != '/' else self.cwd_path + '/'
 
   def __str__(self):
-    return "CWD_ID:{0}\nCWD_Path:{1}\nRoot_ID: {2}".format(self.cwd_id, self.cwd_path, self.root_id)
+    return str(self.__dict__)
 
   def __repr__(self):
     return self.__str__()
 
 class FTPserver(threading.Thread):
-  def __init__(self, drive):
+  def __init__(self, drive, ip, port):
     self.drive = drive
     self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    self.sock.bind((local_ip,local_port))
+    self.sock.bind( (ip, port) )
     threading.Thread.__init__(self)
 
   def run(self):
