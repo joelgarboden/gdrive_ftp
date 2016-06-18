@@ -3,6 +3,8 @@
 
 import os,socket,threading,time
 from pprint import pprint
+from io import BytesIO
+import sys
 import traceback
 
 from common import FTPstate
@@ -58,6 +60,7 @@ class FTPserverThread(threading.Thread):
 
     def TYPE(self,cmd):
       self.conn.send('200 Binary mode only.\r\n')
+      #TODO support Binary and ASCII toggling
 
     def CDUP(self,cmd):
       self.conn.send('502 Not implemented yet.\r\n')
@@ -73,7 +76,7 @@ class FTPserverThread(threading.Thread):
 
     def CWD(self,cmd):
       path=cmd[4:-2]
-      
+
       if path == '/':
         cd_id = self.state.root_object.id
       else:
@@ -141,6 +144,7 @@ class FTPserverThread(threading.Thread):
       self.conn.send('502 Not implemented yet.\r\n')
 
       chwd=cmd[4:-2].split('/')
+      #TODO Find path until error, then mkdir, and continue finding
 
       for i in chwd:
         dirs_found = 0
@@ -228,21 +232,39 @@ class FTPserverThread(threading.Thread):
       '''
 
     def STOR(self,cmd):
-      fn='/var/tmp' + cmd[5:-2]
-      print 'Uploading:',fn
-      fo=open(fn,'wb')
+      parameter=cmd[5:-2]
+      print 'Parameter:',parameter
+      
+      file_name = parameter.split('/')[-1]
+      
+      #fo=open(fn,'wb')
       self.conn.send('150 Opening data connection.\r\n')
       self.start_datasock()
+
+      if parameter.find('/') == -1:
+        dest_folder = self.state.cwd_id
+      else:
+        destination_path = parameter.replace(file_name, '')
+        print "Getting path", destination_path, "from cwd", self.state.cwd_id
+        dest_folder = self.drive.getFolderByPath(destination_path, self.state.cwd_id)
+
+      print 'Dest folder', dest_folder, 'Filename', file_name
+      
+      ftp_data_stream = BytesIO()
       while True:
         data=self.datasock.recv(1024)
         if not data: break
-        fo.write(data)
-      fo.close()
+        #TODO Write to GDrive directly
+        ftp_data_stream.write(data)
+      
+      ftp_data_stream.flush()
+      ftp_data_stream.seek(0)
+      
       self.stop_datasock()
 
-      print 'FTP transfer complete, uploading to Drive'
+      print 'Memory buffer complete, uploading', sys.getsizeof(ftp_data_stream), 'buffer bytes to Drive'
 
-      self.drive.uploadFile(fn)
+      self.drive.uploadFile(ftp_data_stream, dest_folder.id, file_name)
 
       self.conn.send('226 Drive Transfer complete.\r\n')
 

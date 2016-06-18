@@ -88,6 +88,8 @@ def listFiles(parentDirId=None):
 
 def getFolderByPath(path, cwd_id):
 
+  print('Evaluating',path)
+  
   if path[0:1] == '/':
     top_dir_id = getRoot().id
   else:
@@ -97,12 +99,11 @@ def getFolderByPath(path, cwd_id):
   http = credentials.authorize(httplib2.Http())
   service = discovery.build('drive', 'v3', http=http)
 
-  path_array = path.split('/')
+  path_array = filter(lambda a: a != '', path.split('/'))
+
+  print('Path_array', path_array)
   
   for path in path_array:
-  
-    if path == '':
-      continue
 
     results = service.files().list(
       pageSize=2,
@@ -111,7 +112,7 @@ def getFolderByPath(path, cwd_id):
       ).execute().get('files', [])
 
     if len(results) != 1:
-      return GDrive_File()
+      raise Error('Results of query = ' + str(results))
 
     if path == path_array[-1]:
       folder = results[0]
@@ -129,20 +130,17 @@ def getFolderByPath(path, cwd_id):
       top_dir_id = results[0]['id']
 
   
-def uploadFile(local_filename):
+def uploadFile(bytesio, dir_id, filename):
   credentials = get_credentials()
   http = credentials.authorize(httplib2.Http())
   service = discovery.build('drive', 'v3', http=http)
-
-  fo=io.open(local_filename, 'rb')
-  mime_type = guess_type(local_filename)[0]
-  mime_type = mime_type if mime_type else 'text/plain'
   
   body = {
-    'name': os.path.basename(local_filename),
-    'mimeType': mime_type
+    'name': filename,
+    'parents': [dir_id]
   }
-  media = MediaIoBaseUpload(fo, mimetype=mime_type)
+  
+  media = MediaIoBaseUpload(bytesio, mimetype='application/octet-stream', chunksize=1024*1024, resumable=True)
   response = service.files().create(body=body, media_body=media).execute()
   
   print(response)
