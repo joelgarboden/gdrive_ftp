@@ -112,7 +112,7 @@ def getFolderByPath(path, cwd_id):
       ).execute().get('files', [])
 
     if len(results) != 1:
-      raise Error('Results of query = ' + str(results))
+      raise ValueError(('Results of query = ' + str(results))
 
     if path == path_array[-1]:
       folder = results[0]
@@ -129,7 +129,7 @@ def getFolderByPath(path, cwd_id):
     else:
       top_dir_id = results[0]['id']
 
-  
+
 def uploadFile(bytesio, dir_id, filename):
   credentials = get_credentials()
   http = credentials.authorize(httplib2.Http())
@@ -143,4 +143,19 @@ def uploadFile(bytesio, dir_id, filename):
   media = MediaIoBaseUpload(bytesio, mimetype='application/octet-stream', chunksize=1024*1024, resumable=True)
   response = service.files().create(body=body, media_body=media).execute()
   
+  return response
+  
+def createDirectory(parent_dir_id, directory_name):
+  credentials = get_credentials()
+  http = credentials.authorize(httplib2.Http())
+  service = discovery.build('drive', 'v3', http=http)
+  
+  body = {
+    'name': directory_name,
+    'mimeType': 'application/vnd.google-apps.folder',
+    'parents': [parent_dir_id]
+  }
+  
+  response = service.files().create(body=body).execute()
   print(response)
+  return response  

@@ -141,11 +141,16 @@ class FTPserverThread(threading.Thread):
       self.conn.send('226 Directory send OK.\r\n')
 
     def MKD(self,cmd):
-      self.conn.send('502 Not implemented yet.\r\n')
+      #TODO Error if more than one '/', don't support mkdir -p
 
+      directory_name = filter(lambda a: a != '', cmd[4:-2].split('/'))[0]
+
+      #TODO Ensure directory doesn't exist yet
+      created_dir = self.drive.createDirectory(self.state.cwd_id, directory_name)
+      
+      self.conn.send('257 Directory created. Path=%s/%s ID=%s\r\n'.format(self.state.cwd_path, directory_name, created_dir['id']) )
+      '''
       chwd=cmd[4:-2].split('/')
-      #TODO Find path until error, then mkdir, and continue finding
-
       for i in chwd:
         dirs_found = 0
         for j in self.drive.listFiles(self.state.cwd_id):
@@ -156,10 +161,6 @@ class FTPserverThread(threading.Thread):
         if dirs_found != 0:
 
           self.conn.send('257 Directory created.\r\n')
-      '''
-      dn=os.path.join(self.cwd,cmd[4:-2])
-      os.mkdir(dn)
-
       '''
 
     def RMD(self,cmd):
@@ -234,10 +235,9 @@ class FTPserverThread(threading.Thread):
     def STOR(self,cmd):
       parameter=cmd[5:-2]
       print 'Parameter:',parameter
-      
+
       file_name = parameter.split('/')[-1]
-      
-      #fo=open(fn,'wb')
+
       self.conn.send('150 Opening data connection.\r\n')
       self.start_datasock()
 
@@ -249,17 +249,17 @@ class FTPserverThread(threading.Thread):
         dest_folder = self.drive.getFolderByPath(destination_path, self.state.cwd_id)
 
       print 'Dest folder', dest_folder, 'Filename', file_name
-      
+
       ftp_data_stream = BytesIO()
       while True:
         data=self.datasock.recv(1024)
         if not data: break
         #TODO Write to GDrive directly
         ftp_data_stream.write(data)
-      
+
       ftp_data_stream.flush()
       ftp_data_stream.seek(0)
-      
+
       self.stop_datasock()
 
       print 'Memory buffer complete, uploading', sys.getsizeof(ftp_data_stream), 'buffer bytes to Drive'
