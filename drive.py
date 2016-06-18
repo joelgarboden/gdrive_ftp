@@ -123,8 +123,7 @@ def getFolderByPath(path, cwd_id):
         parents=folder['parents'],
         createdTime=folder['createdTime']
       )
-      print("\n\nReturning folder", found_folder.__dict__)
-      
+
       return found_folder
     else:
       top_dir_id = results[0]['id']

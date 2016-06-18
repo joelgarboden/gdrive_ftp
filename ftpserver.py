@@ -22,11 +22,6 @@ class FTPserverThread(threading.Thread):
     def run(self):
       self.conn.send('220 Welcome!\r\n')
       while True:
-        if self.state.root_object == None:
-          self.state.root_object = self.drive.getRoot()
-          self.state.cwd_id = self.state.root_object.id
-
-        print("Starting state", self.state)
 
         cmd=self.conn.recv(256)
         if not cmd: break
@@ -36,9 +31,8 @@ class FTPserverThread(threading.Thread):
             func=getattr(self,cmd[:4].strip().upper())
             func(cmd)
           except Exception,e:
-            print 'ERROR:',e
             traceback.print_exc()
-            self.conn.send('500 Sorry.\r\n')
+            self.conn.send('500 Unexpected error.\r\n')
 
     def SYST(self,cmd):
       self.conn.send('215 UNIX Type: L8\r\n')
