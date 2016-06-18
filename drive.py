@@ -3,13 +3,14 @@ import httplib2
 import os
 import io
 
-from datetime import datetime
 from apiclient import discovery
 import oauth2client
 from oauth2client import client
 from oauth2client import tools
 from mimetypes import guess_type
 from apiclient.http import MediaIoBaseUpload
+
+from common import GDrive_File
 
 try:
   import argparse
@@ -48,21 +49,19 @@ def getRoot():
   http = credentials.authorize(httplib2.Http())
   service = discovery.build('drive', 'v3', http=http)
 
-  results = service.files().get( fileId='root' ).execute()
-
-  root_dir = results
+  root_dir = service.files().get( fileId='root' ).execute()
   
   return GDrive_File(
       name=root_dir['name'],
       id=root_dir['id'],
       mimeType=root_dir['mimeType'],
-      size=root_dir.get('size', 1),
-      parents=root_dir['parents'],
-      createdTime=root_dir['createdTime']
+      size=1,
+      parents = [].append(root_dir['id'])
     )
 
-def listFiles(parentDirId=getRoot()):
-
+def listFiles(parentDirId=None):
+  dirId = parentDirId if parentDirId != None else getRoot().id
+  
   credentials = get_credentials()
   http = credentials.authorize(httplib2.Http())
   service = discovery.build('drive', 'v3', http=http)
@@ -70,9 +69,9 @@ def listFiles(parentDirId=getRoot()):
   found_files = []
 
   results = service.files().list(
-    pageSize=10,
+    pageSize=200,
     fields="nextPageToken, files(id, name, mimeType, size, parents, createdTime)",
-    q="'{0}' in parents and trashed=false".format(parentDirId)
+    q="'{0}' in parents and trashed=false".format(dirId)
     ).execute()
 
   for item in results.get('files', []):
@@ -90,9 +89,9 @@ def listFiles(parentDirId=getRoot()):
 def getFolderByPath(path, cwd_id):
 
   if path[0:1] == '/':
-    top_dir = getRoot()
+    top_dir_id = getRoot().id
   else:
-    top_dir = cwd_id
+    top_dir_id = cwd_id
     
   credentials = get_credentials()
   http = credentials.authorize(httplib2.Http())
@@ -108,7 +107,7 @@ def getFolderByPath(path, cwd_id):
     results = service.files().list(
       pageSize=2,
       fields="files(id, name, mimeType, size, parents, createdTime)",
-      q="'{0}' in parents and trashed=false and mimeType='application/vnd.google-apps.folder' and name='{1}'".format(top_dir, path)
+      q="'{0}' in parents and trashed=false and mimeType='application/vnd.google-apps.folder' and name='{1}'".format(top_dir_id, path)
       ).execute().get('files', [])
 
     if len(results) != 1:
@@ -128,7 +127,7 @@ def getFolderByPath(path, cwd_id):
       
       return found_folder
     else:
-      top_dir = results[0]['id']
+      top_dir_id = results[0]['id']
 
   
 def uploadFile(local_filename):
@@ -148,19 +147,3 @@ def uploadFile(local_filename):
   response = service.files().create(body=body, media_body=media).execute()
   
   print(response)
-
-class GDrive_File(object):
-  def __init__(self, name=None, id=None, mimeType=None, size=None, parents=None, createdTime=None):
-    self.name = name
-    self.id = id
-    self.mimeType = mimeType
-    self.isDirectory = mimeType == 'application/vnd.google-apps.folder'
-    self.size = size
-    self.parents = parents[0] if parents != None else []
-    self.createdTime = datetime.strptime(createdTime, '%Y-%m-%dT%H:%M:%S.%fZ') if createdTime != None else None
-
-  def __str__(self):
-    return str(self.__dict__)
-    
-  def __repr__(self):
-    return self.__str__()

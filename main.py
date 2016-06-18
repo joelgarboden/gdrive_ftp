@@ -12,6 +12,5 @@ if __name__=='__main__':
   ftp=ftpserver.FTPserver(drive, local_ip, ftp_port)
   ftp.daemon=True
   ftp.start()
-  print 'On', local_ip, ':', ftp_port
   raw_input('Enter to end...\n')
   ftp.stop()
