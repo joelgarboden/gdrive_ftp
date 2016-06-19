@@ -3,8 +3,10 @@ import socket
 import ftpserver
 import drive
 
-local_ip = '0.0.0.0' #socket.gethostbyname(socket.gethostname())
+local_ip = '0.0.0.0'
 ftp_port = 21
+
+#TODO Logging
 
 if __name__=='__main__':
   drive.get_credentials()

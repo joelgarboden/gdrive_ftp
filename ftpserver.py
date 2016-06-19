@@ -19,6 +19,7 @@ class FTPserverThread(threading.Thread):
       self.pasv_mode=False
       self.drive=drive
       self.state=state
+      self.mode='I'
       threading.Thread.__init__(self)
 
     def run(self):
@@ -46,9 +47,11 @@ class FTPserverThread(threading.Thread):
         self.conn.send('451 Sorry.\r\n')
 
     def USER(self,cmd):
+      #TODO authentication
       self.conn.send('331 OK.\r\n')
 
     def PASS(self,cmd):
+      #TODO authentication
       self.conn.send('230 OK.\r\n')
       #self.conn.send('530 Incorrect.\r\n')
 
@@ -59,8 +62,8 @@ class FTPserverThread(threading.Thread):
       self.conn.send('200 OK.\r\n')
 
     def TYPE(self,cmd):
-      self.conn.send('200 Binary mode only.\r\n')
-      #TODO support Binary and ASCII toggling
+      self.mode=cmd[5]
+      self.conn.send( '200 Mode now {0}\r\n'.format(self.mode) )
 
     def CDUP(self,cmd):
       self.conn.send('502 Not implemented yet.\r\n')
@@ -88,6 +91,9 @@ class FTPserverThread(threading.Thread):
         self.conn.send('250 OK.\r\n')
       else:
         self.conn.send('550 Unable to find directory \"%s\"\r\n' % path)
+
+    def EPRT(self,cmd):
+      self.conn.send('502 Not implemented yet.\r\n')
 
     def PORT(self,cmd):
       if self.pasv_mode:
@@ -141,27 +147,22 @@ class FTPserverThread(threading.Thread):
       self.conn.send('226 Directory send OK.\r\n')
 
     def MKD(self,cmd):
-      #TODO Error if more than one '/', don't support mkdir -p
+      paths = filter(lambda a: a != '', cmd[4:-2].split('/'))
+      if len(paths) > 1:
+        self.conn.send('501 mkdir -p not supported\r\n')
+        return
 
-      directory_name = filter(lambda a: a != '', cmd[4:-2].split('/'))[0]
+      directory_name = paths[0]
 
-      #TODO Ensure directory doesn't exist yet
+      dir = self.drive.getFolderByPath(directory_name, self.state.cwd_id)
+
+      if dir.id != None:
+        self.conn.send( '553 Directory exists {0}\r\n'.format(directory_name) )
+        return
+
       created_dir = self.drive.createDirectory(self.state.cwd_id, directory_name)
-      
-      self.conn.send('257 Directory created. Path=%s/%s ID=%s\r\n'.format(self.state.cwd_path, directory_name, created_dir['id']) )
-      '''
-      chwd=cmd[4:-2].split('/')
-      for i in chwd:
-        dirs_found = 0
-        for j in self.drive.listFiles(self.state.cwd_id):
-          if j.name == i:
-            self.state.updateCWD(j.id)
-            dirs_found += 1
 
-        if dirs_found != 0:
-
-          self.conn.send('257 Directory created.\r\n')
-      '''
+      self.conn.send('257 Directory created. Path={0}/{1} ID={2}\r\n'.format(self.state.cwd_path, directory_name, created_dir['id']) )
 
     def RMD(self,cmd):
       self.conn.send('502 Not implemented yet.\r\n')
@@ -209,6 +210,7 @@ class FTPserverThread(threading.Thread):
       '''
 
     def RETR(self,cmd):
+      #TODO Download file
       self.conn.send('502 Not implemented yet.\r\n')
       '''
       fn=os.path.join(self.cwd,cmd[5:-2])
@@ -234,7 +236,6 @@ class FTPserverThread(threading.Thread):
 
     def STOR(self,cmd):
       parameter=cmd[5:-2]
-      print 'Parameter:',parameter
 
       file_name = parameter.split('/')[-1]
 
@@ -242,13 +243,14 @@ class FTPserverThread(threading.Thread):
       self.start_datasock()
 
       if parameter.find('/') == -1:
-        dest_folder = self.state.cwd_id
+        dest_folder_id = self.state.cwd_id
       else:
         destination_path = parameter.replace(file_name, '')
-        print "Getting path", destination_path, "from cwd", self.state.cwd_id
-        dest_folder = self.drive.getFolderByPath(destination_path, self.state.cwd_id)
+        dest_folder_id = self.drive.getFolderByPath(destination_path, self.state.cwd_id).id
 
-      print 'Dest folder', dest_folder, 'Filename', file_name
+      if dest_folder_id == None:
+        self.conn.send('550 Unable to find folder.\r\n')
+        return
 
       ftp_data_stream = BytesIO()
       while True:
@@ -264,7 +266,7 @@ class FTPserverThread(threading.Thread):
 
       print 'Memory buffer complete, uploading', sys.getsizeof(ftp_data_stream), 'buffer bytes to Drive'
 
-      self.drive.uploadFile(ftp_data_stream, dest_folder.id, file_name)
+      self.drive.uploadFile(ftp_data_stream, dest_folder_id, file_name, self.mode)
 
       self.conn.send('226 Drive Transfer complete.\r\n')
 

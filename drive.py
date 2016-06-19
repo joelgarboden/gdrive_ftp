@@ -50,7 +50,7 @@ def getRoot():
   service = discovery.build('drive', 'v3', http=http)
 
   root_dir = service.files().get( fileId='root' ).execute()
-  
+
   return GDrive_File(
       name=root_dir['name'],
       id=root_dir['id'],
@@ -61,7 +61,7 @@ def getRoot():
 
 def listFiles(parentDirId=None):
   dirId = parentDirId if parentDirId != None else getRoot().id
-  
+
   credentials = get_credentials()
   http = credentials.authorize(httplib2.Http())
   service = discovery.build('drive', 'v3', http=http)
@@ -83,26 +83,22 @@ def listFiles(parentDirId=None):
       parents=item['parents'],
       createdTime=item['createdTime']
     ))
-      
+
   return found_files
 
 def getFolderByPath(path, cwd_id):
 
-  print('Evaluating',path)
-  
   if path[0:1] == '/':
     top_dir_id = getRoot().id
   else:
     top_dir_id = cwd_id
-    
+
   credentials = get_credentials()
   http = credentials.authorize(httplib2.Http())
   service = discovery.build('drive', 'v3', http=http)
 
   path_array = filter(lambda a: a != '', path.split('/'))
 
-  print('Path_array', path_array)
-  
   for path in path_array:
 
     results = service.files().list(
@@ -112,7 +108,7 @@ def getFolderByPath(path, cwd_id):
       ).execute().get('files', [])
 
     if len(results) != 1:
-      raise ValueError(('Results of query = ' + str(results))
+      return GDrive_File()
 
     if path == path_array[-1]:
       folder = results[0]
@@ -129,33 +125,34 @@ def getFolderByPath(path, cwd_id):
     else:
       top_dir_id = results[0]['id']
 
-
-def uploadFile(bytesio, dir_id, filename):
+def uploadFile(bytesio, dir_id, filename, mode):
   credentials = get_credentials()
   http = credentials.authorize(httplib2.Http())
   service = discovery.build('drive', 'v3', http=http)
-  
+
   body = {
     'name': filename,
     'parents': [dir_id]
   }
-  
-  media = MediaIoBaseUpload(bytesio, mimetype='application/octet-stream', chunksize=1024*1024, resumable=True)
+
+  mimeType = 'application/octet-stream' if mode == 'I' else 'text/plain'
+
+  media = MediaIoBaseUpload(bytesio, mimetype=mimeType, chunksize=1024*1024, resumable=True)
   response = service.files().create(body=body, media_body=media).execute()
-  
+
   return response
-  
+
 def createDirectory(parent_dir_id, directory_name):
   credentials = get_credentials()
   http = credentials.authorize(httplib2.Http())
   service = discovery.build('drive', 'v3', http=http)
-  
+
   body = {
     'name': directory_name,
     'mimeType': 'application/vnd.google-apps.folder',
     'parents': [parent_dir_id]
   }
-  
+
   response = service.files().create(body=body).execute()
-  print(response)
-  return response  
+
+  return response
