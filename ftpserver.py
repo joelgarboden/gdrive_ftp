@@ -8,11 +8,12 @@ import sys
 import traceback
 
 from common import FTPstate
+from auth import Auth
 
 allow_delete = False
 
 class FTPserverThread(threading.Thread):
-    def __init__(self,(conn,addr), drive, state):
+    def __init__(self,(conn,addr), drive, state, auth):
       self.conn=conn
       self.addr=addr
       self.rest=False
@@ -20,6 +21,8 @@ class FTPserverThread(threading.Thread):
       self.drive=drive
       self.state=state
       self.mode='I'
+      self.auth = auth
+      self.user_name = ''
       threading.Thread.__init__(self)
 
     def run(self):
@@ -37,6 +40,19 @@ class FTPserverThread(threading.Thread):
             traceback.print_exc()
             self.conn.send('500 Unexpected error.\r\n')
 
+    def start_datasock(self):
+      if self.pasv_mode:
+        self.datasock, addr = self.servsock.accept()
+        print 'connect:', addr
+      else:
+        self.datasock=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+        self.datasock.connect((self.dataAddr,self.dataPort))
+
+    def stop_datasock(self):
+      self.datasock.close()
+      if self.pasv_mode:
+        self.servsock.close()
+
     def SYST(self,cmd):
       self.conn.send('215 UNIX Type: L8\r\n')
 
@@ -47,13 +63,14 @@ class FTPserverThread(threading.Thread):
         self.conn.send('451 Sorry.\r\n')
 
     def USER(self,cmd):
-      #TODO authentication
+      self.user_name = cmd[5:-2]
       self.conn.send('331 OK.\r\n')
 
     def PASS(self,cmd):
-      #TODO authentication
-      self.conn.send('230 OK.\r\n')
-      #self.conn.send('530 Incorrect.\r\n')
+      if self.auth.isValid(self.user_name, cmd[5:-2]):
+        self.conn.send('230 OK.\r\n')
+      else:
+        self.conn.send('530 Incorrect.\r\n')
 
     def QUIT(self,cmd):
       self.conn.send('221 Goodbye.\r\n')
@@ -113,19 +130,6 @@ class FTPserverThread(threading.Thread):
       print 'open', ip, port
       self.conn.send('227 Entering Passive Mode (%s,%u,%u).\r\n' %
               (','.join(ip.split('.')), port>>8&0xFF, port&0xFF))
-
-    def start_datasock(self):
-      if self.pasv_mode:
-        self.datasock, addr = self.servsock.accept()
-        print 'connect:', addr
-      else:
-        self.datasock=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-        self.datasock.connect((self.dataAddr,self.dataPort))
-
-    def stop_datasock(self):
-      self.datasock.close()
-      if self.pasv_mode:
-        self.servsock.close()
 
     def NLST(self,cmd):
       self.LIST(cmd)
@@ -281,7 +285,8 @@ class FTPserver(threading.Thread):
     self.sock.listen(5)
     while True:
       ftp_state = FTPstate(self.drive.getRoot())
-      th=FTPserverThread(self.sock.accept(), self.drive, ftp_state)
+      auth = Auth(auth_file='users.json')
+      th=FTPserverThread(self.sock.accept(), self.drive, ftp_state, auth)
       th.daemon=True
       th.start()
 
