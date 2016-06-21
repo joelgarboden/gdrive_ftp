@@ -156,3 +156,12 @@ def createDirectory(parent_dir_id, directory_name):
   response = service.files().create(body=body).execute()
 
   return response
+
+def delete(object_id):
+  credentials = get_credentials()
+  http = credentials.authorize(httplib2.Http())
+  service = discovery.build('drive', 'v3', http=http)
+
+  response = service.files().delete(fileId=object_id).execute()
+
+  return response

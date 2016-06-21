@@ -11,7 +11,7 @@ ftp_port = 21
 if __name__=='__main__':
   drive.get_credentials()
 
-  ftp=ftpserver.FTPserver(drive, local_ip, ftp_port)
+  ftp=ftpserver.FTPserver(drive, local_ip, ftp_port, allow_delete=True)
   ftp.daemon=True
   ftp.start()
   raw_input('Enter to end...\n')

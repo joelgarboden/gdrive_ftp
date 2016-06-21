@@ -10,10 +10,8 @@ import traceback
 from common import FTPstate
 from auth import Auth
 
-allow_delete = False
-
 class FTPserverThread(threading.Thread):
-    def __init__(self,(conn,addr), drive, state, auth):
+    def __init__(self,(conn,addr), drive, state, auth, allow_delete=False):
       self.conn=conn
       self.addr=addr
       self.rest=False
@@ -23,6 +21,7 @@ class FTPserverThread(threading.Thread):
       self.mode='I'
       self.auth = auth
       self.user_name = ''
+      self.allow_delete = allow_delete
       threading.Thread.__init__(self)
 
     def run(self):
@@ -169,21 +168,27 @@ class FTPserverThread(threading.Thread):
       self.conn.send('257 Directory created. Path={0}/{1} ID={2}\r\n'.format(self.state.cwd_path, directory_name, created_dir['id']) )
 
     def RMD(self,cmd):
-      self.conn.send('502 Not implemented yet.\r\n')
-      '''
-      dn=os.path.join(self.cwd,cmd[4:-2])
-      if allow_delete:
-          os.rmdir(dn)
-          self.conn.send('250 Directory deleted.\r\n')
-      else:
-          self.conn.send('450 Not allowed.\r\n')
-      '''
+      folder_name = cmd[4:-2]
+
+      if not self.allow_delete:
+        self.conn.send('450 Not allowed.\r\n')
+        return
+
+      folder_id = self.drive.getFolderByPath(folder_name, self.state.cwd_id).id
+
+      if folder_id == None:
+        self.conn.send('550 Unable to find folder.\r\n')
+        return
+
+      self.drive.delete(folder_id)
+
+      self.conn.send('250 Directory deleted.\r\n')
 
     def DELE(self,cmd):
       self.conn.send('502 Not implemented yet.\r\n')
       '''
       fn=os.path.join(self.cwd,cmd[5:-2])
-      if allow_delete:
+      if self.allow_delete:
           os.remove(fn)
           self.conn.send('250 File deleted.\r\n')
       else:
@@ -275,8 +280,9 @@ class FTPserverThread(threading.Thread):
       self.conn.send('226 Drive Transfer complete.\r\n')
 
 class FTPserver(threading.Thread):
-  def __init__(self, drive, ip, port):
+  def __init__(self, drive, ip, port, allow_delete):
     self.drive = drive
+    self.allow_delete = allow_delete
     self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     self.sock.bind( (ip, port) )
     threading.Thread.__init__(self)
@@ -286,7 +292,7 @@ class FTPserver(threading.Thread):
     while True:
       ftp_state = FTPstate(self.drive.getRoot())
       auth = Auth(auth_file='users.json')
-      th=FTPserverThread(self.sock.accept(), self.drive, ftp_state, auth)
+      th=FTPserverThread(self.sock.accept(), self.drive, ftp_state, auth, self.allow_delete)
       th.daemon=True
       th.start()
 
