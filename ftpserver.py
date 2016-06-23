@@ -6,6 +6,7 @@ from pprint import pprint
 from io import BytesIO
 import sys
 import traceback
+from apiclient.http import MediaIoBaseDownload
 
 from common import FTPstate
 from auth import Auth
@@ -236,29 +237,57 @@ class FTPserverThread(threading.Thread):
       '''
 
     def RETR(self,cmd):
-      #TODO Download file
-      self.conn.send('502 Not implemented yet.\r\n')
-      '''
-      fn=os.path.join(self.cwd,cmd[5:-2])
-      #fn=os.path.join(self.cwd,cmd[5:-2]).lstrip('/')
-      print 'Downloading:',fn
-      if self.mode=='I':
-          fi=open(fn,'rb')
+      parameter = cmd[5:-2]
+      file_name = parameter.split('/')[-1]
+
+      if not self.allow_delete:
+        self.conn.send('450 Not allowed.\r\n')
+        return
+
+      if parameter.find('/') == -1:
+        folder_id = self.state.cwd_id
       else:
-          fi=open(fn,'r')
+        delete_path = parameter.replace(file_name, '')
+        folder_id = self.drive.getFolderByPath(delete_path, self.state.cwd_id).id
+
+      if folder_id == None:
+        self.conn.send('550 Unable to find folder.\r\n')
+        return
+
+      file = self.drive.getFile(file_name, folder_id)
+
+      if file == None or file.id == None:
+        self.conn.send('550 Unable to find file.\r\n')
+        return
+
       self.conn.send('150 Opening data connection.\r\n')
-      if self.rest:
-          fi.seek(self.pos)
-          self.rest=False
-      data= fi.read(1024)
+
+      data_request = self.drive.getFileData(file.id)
+
+      gdrive_data_stream = BytesIO()
+      downloader = MediaIoBaseDownload(gdrive_data_stream, data_request, chunksize=1024*1024)
       self.start_datasock()
+      done = False
+      while done is False:
+        status, done = downloader.next_chunk()
+        if status:
+          print("download progress: {} %".format(int(status.progress() * 100)))
+
+      print "Downloaded {} bytes into memory".format(sys.getsizeof(gdrive_data_stream))
+      gdrive_data_stream.flush()
+      gdrive_data_stream.seek(0)
+
+      print "Writing data to FTP socket"
+      data = gdrive_data_stream.read(1024)
       while data:
-          self.datasock.send(data)
-          data=fi.read(1024)
-      fi.close()
+        self.datasock.send(data)
+        data = gdrive_data_stream.read(1024)
+
       self.stop_datasock()
+
+      print "Transfer complete"
+
       self.conn.send('226 Transfer complete.\r\n')
-      '''
 
     def STOR(self,cmd):
       parameter=cmd[5:-2]

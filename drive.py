@@ -194,3 +194,13 @@ def delete(object_id):
   response = service.files().delete(fileId=object_id).execute()
 
   return response
+
+def getFileData(file_id):
+  credentials = get_credentials()
+  http = credentials.authorize(httplib2.Http())
+  service = discovery.build('drive', 'v3', http=http)
+  
+  response = service.files().get_media(fileId=file_id)
+
+  return response
+  
