@@ -125,6 +125,35 @@ def getFolderByPath(path, cwd_id):
     else:
       top_dir_id = results[0]['id']
 
+def getFile(file_name, parentDirId=None):
+  dirId = parentDirId if parentDirId != None else getRoot().id
+
+  credentials = get_credentials()
+  http = credentials.authorize(httplib2.Http())
+  service = discovery.build('drive', 'v3', http=http)
+
+  found_files = []
+
+  results = service.files().list(
+    pageSize=2,
+    fields="files(id, name, mimeType, size, parents, createdTime)",
+    q="'{0}' in parents and trashed=false and mimeType!='application/vnd.google-apps.folder' and name='{1}'".format(dirId, file_name)
+    ).execute()
+
+  if len(results['files']) != 1:
+    return GDrive_File()
+
+  item = results['files'][0]
+
+  return GDrive_File(
+      name=item['name'],
+      id=item['id'],
+      mimeType=item['mimeType'],
+      size=item.get('size', 1),
+      parents=item['parents'],
+      createdTime=item['createdTime']
+    )
+
 def uploadFile(bytesio, dir_id, filename, mode):
   credentials = get_credentials()
   http = credentials.authorize(httplib2.Http())

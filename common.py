@@ -24,7 +24,11 @@ class FTPstate(object):
 
   def updateCWD(self, id, path):
     self.cwd_id = id
-    self.cwd_path = self.cwd_path + '/' + path if path[0] != '/' else self.cwd_path + '/'
+
+    if path == None or path == '':
+      self.cwd_path = '/'
+    else:
+      self.cwd_path = self.cwd_path + '/' + path if path[0] != '/' else self.cwd_path + '/'
 
   def __str__(self):
     return str(self.__dict__)

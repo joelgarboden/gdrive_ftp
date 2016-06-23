@@ -53,7 +53,7 @@ class FTPserverThread(threading.Thread):
         self.servsock.close()
 
     def SYST(self,cmd):
-      self.conn.send('215 UNIX Type: L8\r\n')
+      self.conn.send('215 UNIX Type: Google Drive\r\n')
 
     def OPTS(self,cmd):
       if cmd[5:-2].upper()=='UTF8 ON':
@@ -185,15 +185,32 @@ class FTPserverThread(threading.Thread):
       self.conn.send('250 Directory deleted.\r\n')
 
     def DELE(self,cmd):
-      self.conn.send('502 Not implemented yet.\r\n')
-      '''
-      fn=os.path.join(self.cwd,cmd[5:-2])
-      if self.allow_delete:
-          os.remove(fn)
-          self.conn.send('250 File deleted.\r\n')
+      parameter = cmd[5:-2]
+      file_name = parameter.split('/')[-1]
+
+      if not self.allow_delete:
+        self.conn.send('450 Not allowed.\r\n')
+        return
+
+      if parameter.find('/') == -1:
+        folder_id = self.state.cwd_id
       else:
-          self.conn.send('450 Not allowed.\r\n')
-      '''
+        delete_path = parameter.replace(file_name, '')
+        folder_id = self.drive.getFolderByPath(delete_path, self.state.cwd_id).id
+
+      if folder_id == None:
+        self.conn.send('550 Unable to find folder.\r\n')
+        return
+
+      file = self.drive.getFile(file_name, folder_id)
+
+      if file == None or file.id == None:
+        self.conn.send('550 Unable to find file.\r\n')
+        return
+
+      self.drive.delete(file.id)
+
+      self.conn.send('250 File deleted.\r\n')
 
     def RNFR(self,cmd):
       self.conn.send('502 Not implemented yet.\r\n')
