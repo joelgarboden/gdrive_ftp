@@ -6,6 +6,7 @@ from pprint import pprint
 from io import BytesIO
 import sys
 import traceback
+import threading
 from apiclient.http import MediaIoBaseDownload
 
 from common import FTPstate
@@ -265,27 +266,27 @@ class FTPserverThread(threading.Thread):
       data_request = self.drive.getFileData(file.id)
 
       gdrive_data_stream = BytesIO()
-      downloader = MediaIoBaseDownload(gdrive_data_stream, data_request, chunksize=1024*1024)
+
+      CHUNK_SIZE = 1024*1024
+      downloader = MediaIoBaseDownload(gdrive_data_stream, data_request, chunksize=CHUNK_SIZE)
+
       self.start_datasock()
       done = False
       while done is False:
+        gdrive_data_stream.seek(-CHUNK_SIZE, 1)
+        data = gdrive_data_stream.read(CHUNK_SIZE)
+        self.datasock.send(data)
+
         status, done = downloader.next_chunk()
         if status:
-          print("download progress: {} %".format(int(status.progress() * 100)))
+          print("Download progress: {}%".format(int(status.progress() * 100)))
 
-      print "Downloaded {} bytes into memory".format(sys.getsizeof(gdrive_data_stream))
-      gdrive_data_stream.flush()
-      gdrive_data_stream.seek(0)
+      gdrive_data_stream.seek(-CHUNK_SIZE, 1)
+      data = gdrive_data_stream.read(CHUNK_SIZE)
+      self.datasock.send(data)
 
-      print "Writing data to FTP socket"
-      data = gdrive_data_stream.read(1024)
-      while data:
-        self.datasock.send(data)
-        data = gdrive_data_stream.read(1024)
-
+      print "Streamed {} bytes".format(gdrive_data_stream.tell())
       self.stop_datasock()
-
-      print "Transfer complete"
 
       self.conn.send('226 Transfer complete.\r\n')
 
