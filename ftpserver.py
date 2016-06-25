@@ -9,7 +9,7 @@ import traceback
 import threading
 from apiclient.http import MediaIoBaseDownload
 
-from common import FTPstate
+from common import FTPstate, FakeBytesIO
 from auth import Auth
 
 class FTPserverThread(threading.Thread):
@@ -265,7 +265,7 @@ class FTPserverThread(threading.Thread):
 
       data_request = self.drive.getFileData(file.id)
 
-      gdrive_data_stream = BytesIO()
+      gdrive_data_stream = FakeBytesIO()
 
       CHUNK_SIZE = 1024*1024
       downloader = MediaIoBaseDownload(gdrive_data_stream, data_request, chunksize=CHUNK_SIZE)
@@ -273,17 +273,11 @@ class FTPserverThread(threading.Thread):
       self.start_datasock()
       done = False
       while done is False:
-        gdrive_data_stream.seek(-CHUNK_SIZE, 1)
+        status, done = downloader.next_chunk()
         data = gdrive_data_stream.read(CHUNK_SIZE)
         self.datasock.send(data)
-
-        status, done = downloader.next_chunk()
         if status:
           print("Download progress: {}%".format(int(status.progress() * 100)))
-
-      gdrive_data_stream.seek(-CHUNK_SIZE, 1)
-      data = gdrive_data_stream.read(CHUNK_SIZE)
-      self.datasock.send(data)
 
       print "Streamed {} bytes".format(gdrive_data_stream.tell())
       self.stop_datasock()
