@@ -43,26 +43,17 @@ class FakeBytesIO(object):
 
   def write(self, bytes):
     if self.data != None:
-      raise RuntimeError("Invalid operation, must read before writing")
-    self.total_bytes += len(bytes)
+      raise RuntimeError("Invalid operation, must read data before overwriting")
 
+    self.total_bytes += len(bytes)
     self.data = bytes
+
     print "Bytes to write = {}".format(bytes)
 
   def read(self, n_bytes):
+    if self.data != None:
+      raise RuntimeError("Invalid operation, must write data before reading")
     return_data = self.data
     self.data = None
     print "Read data={}".format(return_data)
     return return_data
-
-  def close(self):
-    print "Close"
-
-  def flush(self):
-    print "Flush"
-
-  def seek(self, offset, whence):
-    print "Seek: O={} W={}".format(offset, whence)
-
-  def tell(self):
-    return self.total_bytes

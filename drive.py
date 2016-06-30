@@ -158,7 +158,7 @@ def uploadFile(bytesio, dir_id, filename, mode):
   credentials = get_credentials()
   http = credentials.authorize(httplib2.Http())
   service = discovery.build('drive', 'v3', http=http)
-
+  #TODO prevent duplicates
   body = {
     'name': filename,
     'parents': [dir_id]
@@ -167,7 +167,14 @@ def uploadFile(bytesio, dir_id, filename, mode):
   mimeType = 'application/octet-stream' if mode == 'I' else 'text/plain'
 
   media = MediaIoBaseUpload(bytesio, mimetype=mimeType, chunksize=1024*1024, resumable=True)
-  response = service.files().create(body=body, media_body=media).execute()
+  request = service.files().create(body=body, media_body=media)
+
+  response = None
+  while response is None:
+    status, response = request.next_chunk()
+    if status:
+      print ("Uploaded %d%%." % int(status.progress() * 100))
+  print ("Upload Complete!")
 
   return response
 
@@ -199,8 +206,7 @@ def getFileData(file_id):
   credentials = get_credentials()
   http = credentials.authorize(httplib2.Http())
   service = discovery.build('drive', 'v3', http=http)
-  
+
   response = service.files().get_media(fileId=file_id)
 
   return response
-  

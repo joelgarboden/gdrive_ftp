@@ -85,12 +85,6 @@ class FTPserverThread(threading.Thread):
 
     def CDUP(self,cmd):
       self.conn.send('502 Not implemented yet.\r\n')
-      '''
-      if not os.path.samefile(self.cwd,self.basewd):
-          #learn from stackoverflow
-          self.cwd=os.path.abspath(os.path.join(self.cwd,'..'))
-      self.conn.send('200 OK.\r\n')
-      '''
 
     def PWD(self,cmd):
       self.conn.send('257 \"%s\"\r\n' % self.state.cwd_path)
@@ -138,6 +132,7 @@ class FTPserverThread(threading.Thread):
     def LIST(self,cmd):
       self.conn.send('150 Here comes the directory listing.\r\n')
 
+      #TODO support ls with path
       found_files = self.drive.listFiles(self.state.cwd_id)
 
       self.start_datasock()
@@ -216,26 +211,12 @@ class FTPserverThread(threading.Thread):
 
     def RNFR(self,cmd):
       self.conn.send('502 Not implemented yet.\r\n')
-      '''
-      self.rnfn=os.path.join(self.cwd,cmd[5:-2])
-      self.conn.send('350 Ready.\r\n')
-      '''
 
     def RNTO(self,cmd):
       self.conn.send('502 Not implemented yet.\r\n')
-      '''
-      fn=os.path.join(self.cwd,cmd[5:-2])
-      os.rename(self.rnfn,fn)
-      self.conn.send('250 File renamed.\r\n')
-      '''
 
     def REST(self,cmd):
       self.conn.send('502 Not implemented yet.\r\n')
-      '''
-      self.pos=int(cmd[5:-2])
-      self.rest=True
-      self.conn.send('250 File position reseted.\r\n')
-      '''
 
     def RETR(self,cmd):
       parameter = cmd[5:-2]
@@ -267,6 +248,7 @@ class FTPserverThread(threading.Thread):
 
       gdrive_data_stream = FakeBytesIO()
 
+      #TODO move into drive.py
       CHUNK_SIZE = 1024*1024
       downloader = MediaIoBaseDownload(gdrive_data_stream, data_request, chunksize=CHUNK_SIZE)
 
@@ -302,19 +284,18 @@ class FTPserverThread(threading.Thread):
         self.conn.send('550 Unable to find folder.\r\n')
         return
 
+      print self.datasock.__dict__
+
       ftp_data_stream = BytesIO()
       while True:
         data=self.datasock.recv(1024)
         if not data: break
-        #TODO Write to GDrive directly
+        #TODO Write to GDrive directly. TL;DR, can't without a lot of rewrite.
         ftp_data_stream.write(data)
-
-      ftp_data_stream.flush()
-      ftp_data_stream.seek(0)
 
       self.stop_datasock()
 
-      print 'Memory buffer complete, uploading', sys.getsizeof(ftp_data_stream), 'buffer bytes to Drive'
+      print 'Memory buffer complete, uploading {} bytes to Drive'.format(ftp_data_stream.seek(0, 2))
 
       self.drive.uploadFile(ftp_data_stream, dest_folder_id, file_name, self.mode)
 
