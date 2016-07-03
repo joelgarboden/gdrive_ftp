@@ -157,7 +157,7 @@ class GDrive(object):
     credentials = self.get_credentials()
     http = credentials.authorize(httplib2.Http())
     service = discovery.build('drive', 'v3', http=http)
-    #TODO prevent duplicates
+
     body = {
       'name': filename,
       'parents': [dir_id]

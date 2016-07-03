@@ -147,14 +147,30 @@ class FTPserverThread(threading.Thread):
 
       #TODO support ls with path
       found_files = self.drive.listFiles(dir_id)
+      found_files.sort(key=lambda x: x.name)
+
+      largest_number_length = len(sorted(found_files, key=lambda x: int(x.size), reverse=True)[0].size)
+      longest_name_length = len(sorted(found_files, key=lambda x: len(x.name), reverse=True)[0].name) + 1
 
       self.start_datasock()
       for file in found_files:
-        d=file.isDirectory and 'd' or '-'
+        if file.isDirectory:
+          d = 'd'
+          file.name += '/'
+        else:
+          d = '-'
 
-        ftime=file.createdTime.strftime('%b %m %H:%M')
-        k='{0}rw------- {1} {2} {3} {4}'.format(d, file.size, ftime, file.name, file.id)
-        self.datasock.send(k+'\r\n')
+        ftime = file.createdTime.strftime('%b %m %H:%M')
+        file_info = '{directory}rw------- {size:>{size_width}} {modified} {name:<{name_width}} {id}'.format(
+          directory=d,
+          size=file.size,
+          size_width=largest_number_length,
+          modified=ftime,
+          name=file.name,
+          name_width=longest_name_length,
+          id=file.id)
+
+        self.datasock.send(file_info+'\r\n')
 
       self.stop_datasock()
       self.conn.send('226 Directory send OK.\r\n')
