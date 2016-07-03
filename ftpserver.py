@@ -141,7 +141,7 @@ class FTPserverThread(threading.Thread):
         d=file.isDirectory and 'd' or '-'
 
         ftime=file.createdTime.strftime('%b %m %H:%M')
-        k='{0}rw------- 1 user group {1} {2} {3}'.format(d, file.size, ftime, file.name)
+        k='{0}rw------- {1} {2} {3} {4}'.format(d, file.size, ftime, file.name, file.id)
         self.datasock.send(k+'\r\n')
 
       self.stop_datasock()
