@@ -60,22 +60,28 @@ class GDrive(object):
     service = discovery.build('drive', 'v3', http=http)
 
     found_files = []
+    page_token = None
 
-    results = service.files().list(
-      pageSize=200,
-      fields="nextPageToken, files(id, name, mimeType, size, parents, createdTime)",
-      q="'{0}' in parents and trashed=false".format(dirId)
-      ).execute()
+    while True:
+      response = service.files().list(
+        pageSize=25,
+        fields="nextPageToken, files(id, name, mimeType, size, parents, createdTime)",
+        q="'{0}' in parents and trashed=false".format(dirId),
+        pageToken=page_token
+        ).execute()
 
-    for item in results.get('files', []):
-      found_files.append(GDrive_File(
-        name=item['name'],
-        id=item['id'],
-        mimeType=item['mimeType'],
-        size=item.get('size', 1),
-        parents=item['parents'],
-        createdTime=item['createdTime']
-      ))
+      for item in response.get('files', []):
+        found_files.append(GDrive_File(
+          name=item['name'],
+          id=item['id'],
+          mimeType=item['mimeType'],
+          size=item.get('size', 1),
+          parents=item['parents'],
+          createdTime=item['createdTime']
+        ))
+      page_token = response.get('nextPageToken', None)
+      if page_token is None:
+        break;
 
     return found_files
 
