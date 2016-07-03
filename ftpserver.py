@@ -93,6 +93,15 @@ class FTPserverThread(threading.Thread):
     def CWD(self,cmd):
       path=cmd[4:-2]
 
+      if path[0:3] == 'id=':
+        id = path[3:]
+        if self.drive.exists(id):
+          self.state.updateCWD(id, 'unsupported for id=')
+          self.conn.send('250 OK.\r\n')
+        else:
+          self.conn.send('550 Unable to find directory\r\n')
+        return
+
       if path == '/':
         cd_id = self.state.root_object.id
       else:
@@ -131,10 +140,13 @@ class FTPserverThread(threading.Thread):
       self.LIST(cmd)
 
     def LIST(self,cmd):
+      parameter = cmd[4:-2].strip()
       self.conn.send('150 Here comes the directory listing.\r\n')
 
+      dir_id = parameter[3:] if parameter[0:3] == 'id=' else self.state.cwd_id
+
       #TODO support ls with path
-      found_files = self.drive.listFiles(self.state.cwd_id)
+      found_files = self.drive.listFiles(dir_id)
 
       self.start_datasock()
       for file in found_files:
@@ -172,6 +184,12 @@ class FTPserverThread(threading.Thread):
         self.conn.send('450 Not allowed.\r\n')
         return
 
+      if folder_name[0:3] == 'id=':
+        id = folder_name[3:]
+        self.drive.delete(id)
+        self.conn.send('250 Directory deleted.\r\n')
+        return
+
       folder_id = self.drive.getFolderByPath(folder_name, self.state.cwd_id).id
 
       if folder_id == None:
@@ -184,11 +202,18 @@ class FTPserverThread(threading.Thread):
 
     def DELE(self,cmd):
       parameter = cmd[5:-2]
-      file_name = parameter.split('/')[-1]
 
       if not self.allow_delete:
         self.conn.send('450 Not allowed.\r\n')
         return
+
+      if parameter[0:3] == 'id=':
+        id = parameter[3:]
+        self.drive.delete(id)
+        self.conn.send('250 File deleted.\r\n')
+        return
+
+      file_name = parameter.split('/')[-1]
 
       if parameter.find('/') == -1:
         folder_id = self.state.cwd_id
@@ -223,8 +248,14 @@ class FTPserverThread(threading.Thread):
       parameter = cmd[5:-2]
       file_name = parameter.split('/')[-1]
 
-      if not self.allow_delete:
-        self.conn.send('450 Not allowed.\r\n')
+      if parameter[0:3] == 'id=':
+        id = parameter[3:]
+        self.conn.send('150 Opening data connection.\r\n')
+        self.start_datasock()
+        self.drive.getFileData(id, self.datasock)
+        self.stop_datasock()
+
+        self.conn.send('226 Transfer complete.\r\n')
         return
 
       if parameter.find('/') == -1:

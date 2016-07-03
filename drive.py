@@ -9,7 +9,7 @@ import oauth2client
 from oauth2client import client, tools
 from mimetypes import guess_type
 from apiclient.http import MediaIoBaseUpload, MediaIoBaseDownload
-
+from googleapiclient.errors import HttpError
 from common import GDrive_File, FakeBytesIO
 
 class GDrive(object):
@@ -218,3 +218,13 @@ class GDrive(object):
     print( "Streamed {} bytes".format(gdrive_data_stream.tell()) )
 
     return done
+
+  def exists(self, id):
+    credentials = self.get_credentials()
+    http = credentials.authorize(httplib2.Http())
+    service = discovery.build('drive', 'v3', http=http)
+    try:
+      service.files().get(fileId=id).execute()
+      return True
+    except HttpError:
+      return False
