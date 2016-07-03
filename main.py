@@ -1,17 +1,18 @@
 import socket
 
 import ftpserver
-import drive
-
-local_ip = '0.0.0.0'
-ftp_port = 21
+from drive import GDrive
+import common
 
 #TODO Logging
 
 if __name__=='__main__':
+  config = common.getConfig()
+
+  drive = GDrive(config['drive'])
   drive.get_credentials()
 
-  ftp=ftpserver.FTPserver(drive, local_ip, ftp_port, allow_delete=True)
+  ftp=ftpserver.FTPserver(drive, config)
   ftp.daemon=True
   ftp.start()
   raw_input('Enter to end...\n')

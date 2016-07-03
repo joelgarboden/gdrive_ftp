@@ -1,0 +1,21 @@
+{
+  "logging": {
+  },
+  "drive": {
+    "client_secrets": "./client_secret.json",
+    "credentials_cache": "./.credentials.cache",
+    "scopes": "https://www.googleapis.com/auth/drive",
+    "app_name": "Google Drive FTP",
+    "chunk_size": 1048576
+  },
+  "ftp": {
+    "bind_ip": "0.0.0.0",
+    "bind_port": 21,
+    "allow_delete": true,
+    "local_cache": "/var/tmp/gdrive_ftp/cache",
+    "chunk_size": 1048576
+  },
+  "users": {
+    "user": "password"
+  }
+}

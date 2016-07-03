@@ -1,14 +1,6 @@
-import json
-
 class Auth(object):
-  def __init__(self, auth_file=None):
-    if auth_file != None:
-      self.auth_file = auth_file
-      with open(self.auth_file) as json_data_file:
-        self.users_list = json.load(json_data_file)['users']
-    else:
-      #TODO Implement GDrive auth
-      raise NotImplementedError("Only file auth is currently supported")
+  def __init__(self, users_list):
+    self.users_list = users_list
 
   def isValid(self, user_name, password):
     if len(self.users_list) == 0:

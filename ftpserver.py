@@ -7,23 +7,24 @@ from io import BytesIO
 import sys
 import traceback
 import threading
-from apiclient.http import MediaIoBaseDownload
 
-from common import FTPstate, FakeBytesIO
+from common import FTPstate
 from auth import Auth
 
 class FTPserverThread(threading.Thread):
-    def __init__(self,(conn,addr), drive, state, auth, allow_delete=False):
+    def __init__(self,(conn,addr), drive, state, auth, config):
       self.conn=conn
       self.addr=addr
-      self.rest=False
-      self.pasv_mode=False
       self.drive=drive
       self.state=state
       self.mode='I'
       self.auth = auth
+      self.config = config
+      self.allow_delete = config['allow_delete']
+
       self.user_name = ''
-      self.allow_delete = allow_delete
+      self.rest=False
+      self.pasv_mode=False
       threading.Thread.__init__(self)
 
     def run(self):
@@ -244,24 +245,8 @@ class FTPserverThread(threading.Thread):
 
       self.conn.send('150 Opening data connection.\r\n')
 
-      data_request = self.drive.getFileData(file.id)
-
-      gdrive_data_stream = FakeBytesIO()
-
-      #TODO move into drive.py
-      CHUNK_SIZE = 1024*1024
-      downloader = MediaIoBaseDownload(gdrive_data_stream, data_request, chunksize=CHUNK_SIZE)
-
       self.start_datasock()
-      done = False
-      while done is False:
-        status, done = downloader.next_chunk()
-        data = gdrive_data_stream.read(CHUNK_SIZE)
-        self.datasock.send(data)
-        if status:
-          print("Download progress: {}%".format(int(status.progress() * 100)))
-
-      print "Streamed {} bytes".format(gdrive_data_stream.tell())
+      upload_response = self.drive.getFileData(file.id, self.datasock)
       self.stop_datasock()
 
       self.conn.send('226 Transfer complete.\r\n')
@@ -284,11 +269,10 @@ class FTPserverThread(threading.Thread):
         self.conn.send('550 Unable to find folder.\r\n')
         return
 
-      print self.datasock.__dict__
-
+      #TODO move to drive.py
       ftp_data_stream = BytesIO()
       while True:
-        data=self.datasock.recv(1024)
+        data=self.datasock.recv(self.config['chunk_size'])
         if not data: break
         #TODO Write to GDrive directly. TL;DR, can't without a lot of rewrite.
         ftp_data_stream.write(data)
@@ -302,19 +286,20 @@ class FTPserverThread(threading.Thread):
       self.conn.send('226 Drive Transfer complete.\r\n')
 
 class FTPserver(threading.Thread):
-  def __init__(self, drive, ip, port, allow_delete):
+  def __init__(self, drive, config):
     self.drive = drive
-    self.allow_delete = allow_delete
+    self.config = config['ftp']
+    self.auth = Auth(config['users'])
     self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    self.sock.bind( (ip, port) )
+    self.sock.bind( (self.config['bind_ip'], self.config['bind_port']) )
     threading.Thread.__init__(self)
 
   def run(self):
     self.sock.listen(5)
     while True:
       ftp_state = FTPstate(self.drive.getRoot())
-      auth = Auth(auth_file='users.json')
-      th=FTPserverThread(self.sock.accept(), self.drive, ftp_state, auth, self.allow_delete)
+
+      th=FTPserverThread(self.sock.accept(), self.drive, ftp_state, self.auth, self.config)
       th.daemon=True
       th.start()
 

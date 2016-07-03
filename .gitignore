@@ -89,5 +89,5 @@ ENV/
 .ropeproject
 
 # Session files
-storage.json
+.credentials.cache
 client_secret.json

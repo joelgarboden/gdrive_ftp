@@ -1,4 +1,5 @@
 from datetime import datetime
+import json
 
 class GDrive_File(object):
   def __init__(self, name=None, id=None, mimeType=None, size=None, parents=None, createdTime=None):
@@ -42,18 +43,17 @@ class FakeBytesIO(object):
     self.total_bytes = 0
 
   def write(self, bytes):
-    if self.data != None:
-      raise RuntimeError("Invalid operation, must read data before overwriting")
-
     self.total_bytes += len(bytes)
     self.data = bytes
 
-    print "Bytes to write = {}".format(bytes)
-
   def read(self, n_bytes):
-    if self.data != None:
-      raise RuntimeError("Invalid operation, must write data before reading")
     return_data = self.data
     self.data = None
-    print "Read data={}".format(return_data)
     return return_data
+    
+  def tell(self):
+    return self.total_bytes
+
+def getConfig(config_file='config.json'):
+    with open(config_file) as json_config_file:
+      return json.load(json_config_file)
