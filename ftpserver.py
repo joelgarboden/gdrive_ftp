@@ -56,7 +56,7 @@ class FTPserverThread(threading.Thread):
         self.servsock.close()
 
     def SYST(self,cmd):
-      self.conn.send('215 UNIX Type: Google Drive\r\n')
+      self.conn.send('215 UNIX Type: L8\r\n')
 
     def OPTS(self,cmd):
       if cmd[5:-2].upper()=='UTF8 ON':
