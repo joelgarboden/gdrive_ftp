@@ -1,4 +1,3 @@
-from __future__ import print_function
 import httplib2
 import os
 import io
@@ -13,8 +12,9 @@ from googleapiclient.errors import HttpError
 from common import GDrive_File, FakeBytesIO
 
 class GDrive(object):
-  def __init__(self, config):
+  def __init__(self, config, parent_logger):
     self.config = config
+    self.logger = parent_logger.getLogger(__name__)
 
   def get_credentials(self):
     try:
@@ -33,7 +33,7 @@ class GDrive(object):
         credentials = tools.run_flow(flow, store, flags)
       else: # Needed only for compatibility with Python 2.6
         credentials = tools.run(flow, store)
-      print('Storing credentials to ' + self.config['credentials_cache'])
+      self.logger.info('Storing credentials to %s', self.config['credentials_cache'])
 
     return credentials
 
@@ -172,8 +172,8 @@ class GDrive(object):
     while response is None:
       status, response = request.next_chunk()
       if status:
-        print ("Uploaded %d%%." % int(status.progress() * 100))
-    print ("Upload Complete!")
+        self.logger.info("Uploaded %s: %d%%.", filename, int(status.progress() * 100))
+    self.logger.info("Upload Complete %s", filename)
 
     return response
 
@@ -219,9 +219,9 @@ class GDrive(object):
       data = gdrive_data_stream.read(CHUNK_SIZE)
       ftp_datasock.send(data)
       if status:
-        print("Download progress: {}%".format(int(status.progress() * 100)))
+        self.logger.info("Downloaded %s: %d%%.", filename, int(status.progress() * 100))
 
-    print( "Streamed {} bytes".format(gdrive_data_stream.tell()) )
+    self.logger.info("Streamed %s bytes", gdrive_data_stream.tell())
 
     return done
 

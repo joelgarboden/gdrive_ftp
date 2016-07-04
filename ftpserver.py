@@ -41,13 +41,14 @@ class FTPserverThread(threading.Thread):
             func(cmd)
           except Exception,e:
             traceback.print_exc()
+            self.logger.exception("Exception, %s", e)
             self.conn.send('500 Unexpected error.\r\n')
 
     def start_datasock(self):
       self.logger.info("Starting datasock")
       if self.pasv_mode:
         self.datasock, addr = self.servsock.accept()
-        print 'connect:', addr
+        self.logger.info("Connect: %s", addr)
       else:
         self.datasock=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
         self.datasock.connect((self.dataAddr,self.dataPort))
@@ -100,12 +101,12 @@ class FTPserverThread(threading.Thread):
       self.conn.send('502 Not implemented yet.\r\n')
 
     def PWD(self,cmd):
-      self.logger.info("PWD: %s", self.state.cwd_path)
+      self.logger.info("PWD %s", self.state.cwd_path)
       self.conn.send('257 \"%s\"\r\n' % self.state.cwd_path)
 
     def CWD(self,cmd):
       path=cmd[4:-2]
-      self.logger.info("CD to %s", path)
+      self.logger.info("CD %s", path)
       if path[0:3] == 'id=':
         id = path[3:]
         if self.drive.exists(id):
@@ -125,6 +126,7 @@ class FTPserverThread(threading.Thread):
         self.state.updateCWD(cd_id, path)
         self.conn.send('250 OK.\r\n')
       else:
+        self.logger.info("Unable to find directory %s", path)
         self.conn.send('550 Unable to find directory \"%s\"\r\n' % path)
 
     def EPRT(self,cmd):
@@ -143,15 +145,15 @@ class FTPserverThread(threading.Thread):
     def PASV(self,cmd): # from http://goo.gl/3if2U
       self.pasv_mode = True
       self.servsock = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-      self.servsock.bind(('0.0.0.0',0))
+      self.servsock.bind((self.config['bind_port'],0))
       self.servsock.listen(1)
       ip, port = self.servsock.getsockname()
-      print 'open', ip, port
+      self.logger.info("PASV %s %s", ip, port)
       self.conn.send('227 Entering Passive Mode (%s,%u,%u).\r\n' %
               (','.join(ip.split('.')), port>>8&0xFF, port&0xFF))
 
     def NLST(self,cmd):
-      self.logger.info("NLIST")
+      self.logger.info("NLIST %s", cmd)
       self.LIST(cmd)
 
     def LIST(self,cmd):
@@ -194,6 +196,7 @@ class FTPserverThread(threading.Thread):
     def MKD(self,cmd):
       paths = filter(lambda a: a != '', cmd[4:-2].split('/'))
       if len(paths) > 1:
+        self.logger.info("mkdir -p not supported")
         self.conn.send('501 mkdir -p not supported\r\n')
         return
 
@@ -202,11 +205,13 @@ class FTPserverThread(threading.Thread):
       dir = self.drive.getFolderByPath(directory_name, self.state.cwd_id)
 
       if dir.id != None:
+        self.logger.info("Directory exists %s", directory_name)
         self.conn.send( '553 Directory exists {0}\r\n'.format(directory_name) )
         return
 
       created_dir = self.drive.createDirectory(self.state.cwd_id, directory_name)
 
+      self.logger.info("Directory created. Path=%s/%s ID=%s", self.state.cwd_path, directory_name, created_dir['id'])
       self.conn.send('257 Directory created. Path={0}/{1} ID={2}\r\n'.format(self.state.cwd_path, directory_name, created_dir['id']) )
 
     def RMD(self,cmd):
@@ -237,7 +242,7 @@ class FTPserverThread(threading.Thread):
 
     def DELE(self,cmd):
       parameter = cmd[5:-2]
-      
+      self.logger.info("DELE %s", parameter)
       if not self.allow_delete:
         self.logger.info("Delete not allowed, %s", parameter)
         self.conn.send('450 Not allowed.\r\n')
@@ -246,6 +251,7 @@ class FTPserverThread(threading.Thread):
       if parameter[0:3] == 'id=':
         id = parameter[3:]
         self.drive.delete(id)
+        self.logger.info("File deleted, %s", id)
         self.conn.send('250 File deleted.\r\n')
         return
 
@@ -258,30 +264,36 @@ class FTPserverThread(threading.Thread):
         folder_id = self.drive.getFolderByPath(delete_path, self.state.cwd_id).id
 
       if folder_id == None:
-        self.conn.send('550 Unable to find folder.\r\n')
+        self.logger.info("Unable to find parent folder, %s", file_name)
+        self.conn.send('550 Unable to find parent folder.\r\n')
         return
 
       file = self.drive.getFile(file_name, folder_id)
 
       if file == None or file.id == None:
+        self.logger.info("Unable to find file, %s", file_name)
         self.conn.send('550 Unable to find file.\r\n')
         return
 
       self.drive.delete(file.id)
-
+      self.logger.info("File deleted, %s", file_name)
       self.conn.send('250 File deleted.\r\n')
 
     def RNFR(self,cmd):
+      self.logger.info("RNFR Not implemented yet")
       self.conn.send('502 Not implemented yet.\r\n')
 
     def RNTO(self,cmd):
+      self.logger.info("RNTO Not implemented yet")
       self.conn.send('502 Not implemented yet.\r\n')
 
     def REST(self,cmd):
+      self.logger.info("REST Not implemented yet")
       self.conn.send('502 Not implemented yet.\r\n')
 
     def RETR(self,cmd):
       parameter = cmd[5:-2]
+      self.logger.info("RETR, %s", parameter)
       file_name = parameter.split('/')[-1]
 
       if parameter[0:3] == 'id=':
@@ -290,7 +302,7 @@ class FTPserverThread(threading.Thread):
         self.start_datasock()
         self.drive.getFileData(id, self.datasock)
         self.stop_datasock()
-
+        self.logger.info("Transfer complete, %s", parameter)
         self.conn.send('226 Transfer complete.\r\n')
         return
 
@@ -301,12 +313,14 @@ class FTPserverThread(threading.Thread):
         folder_id = self.drive.getFolderByPath(delete_path, self.state.cwd_id).id
 
       if folder_id == None:
+        self.logger.info("Unable to find folder")
         self.conn.send('550 Unable to find folder.\r\n')
         return
 
       file = self.drive.getFile(file_name, folder_id)
 
       if file == None or file.id == None:
+        self.logger.info("Unable to find file %s in %s", file_name, folder_id)
         self.conn.send('550 Unable to find file.\r\n')
         return
 
@@ -316,11 +330,12 @@ class FTPserverThread(threading.Thread):
       upload_response = self.drive.getFileData(file.id, self.datasock)
       self.stop_datasock()
 
+      self.logger.info("Transfer complete of %s", parameter)
       self.conn.send('226 Transfer complete.\r\n')
 
     def STOR(self,cmd):
       parameter=cmd[5:-2]
-
+      self.logger.info("STOR %s", parameter)
       file_name = parameter.split('/')[-1]
 
       self.conn.send('150 Opening data connection.\r\n')
@@ -334,6 +349,7 @@ class FTPserverThread(threading.Thread):
 
       if dest_folder_id == None:
         self.conn.send('550 Unable to find folder.\r\n')
+        self.logger.info("Unable to find folder %s", destination_path)
         return
 
       #TODO move to drive.py
@@ -346,10 +362,10 @@ class FTPserverThread(threading.Thread):
 
       self.stop_datasock()
 
-      print 'Memory buffer complete, uploading {} bytes to Drive'.format(ftp_data_stream.seek(0, 2))
-
+      self.logger.info('Memory buffer complete, uploading %s bytes to Drive', ftp_data_stream.seek(0, 2))
       self.drive.uploadFile(ftp_data_stream, dest_folder_id, file_name, self.mode)
 
+      self.logger.info("Drive transfer complete")
       self.conn.send('226 Drive Transfer complete.\r\n')
 
 class FTPserver(threading.Thread):
@@ -357,7 +373,7 @@ class FTPserver(threading.Thread):
     self.drive = drive
     self.logger = logger
     self.config = config['ftp']
-    self.auth = Auth(config['users'])
+    self.auth = Auth(config['users'], logger)
     self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     self.sock.bind( (self.config['bind_ip'], self.config['bind_port']) )
     threading.Thread.__init__(self)

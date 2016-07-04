@@ -1,10 +1,11 @@
 class Auth(object):
-  def __init__(self, users_list):
+  def __init__(self, users_list, parent_logger):
     self.users_list = users_list
+    self.logger = parent_logger.getLogger(__name__)
 
   def isValid(self, user_name, password):
     if len(self.users_list) == 0:
-      print 'No users configured, configured for anonymous'
+      self.logger.warning('No users configured, running as anonymous')
       return True
 
     try:
