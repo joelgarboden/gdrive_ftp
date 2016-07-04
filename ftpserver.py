@@ -161,9 +161,18 @@ class FTPserverThread(threading.Thread):
       self.logger.info("LIST %s", parameter)
       self.conn.send('150 Here comes the directory listing.\r\n')
 
-      dir_id = parameter[3:] if parameter[0:3] == 'id=' else self.state.cwd_id
+      if parameter[0:3] == 'id=':
+        dir_id = parameter[3:]
+      elif parameter == '':
+        dir_id = self.state.cwd_id
+      else:
+        dir_id = self.drive.getFolderByPath(parameter, self.state.cwd_id).id
 
-      #TODO support ls with path
+      if dir_id == None:
+        self.logger.info("Unable to find folder, %s", parameter)
+        self.conn.send('550 Unable to find folder.\r\n')
+        return
+
       found_files = self.drive.listFiles(dir_id)
       found_files.sort(key=lambda x: x.name)
 
