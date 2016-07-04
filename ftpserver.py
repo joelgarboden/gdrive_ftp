@@ -12,12 +12,13 @@ from common import FTPstate
 from auth import Auth
 
 class FTPserverThread(threading.Thread):
-    def __init__(self,(conn,addr), drive, state, auth, config):
+    def __init__(self,(conn,addr), drive, state, auth, config, parent_logger):
       self.conn=conn
       self.addr=addr
       self.drive=drive
       self.state=state
       self.mode='I'
+      self.logger = parent_logger
       self.auth = auth
       self.config = config
       self.allow_delete = config['allow_delete']
@@ -34,7 +35,7 @@ class FTPserverThread(threading.Thread):
         cmd=self.conn.recv(256)
         if not cmd: break
         else:
-          print 'Received:',cmd
+          self.logger.debug("Received (%s)", cmd)
           try:
             func=getattr(self,cmd[:4].strip().upper())
             func(cmd)
@@ -43,6 +44,7 @@ class FTPserverThread(threading.Thread):
             self.conn.send('500 Unexpected error.\r\n')
 
     def start_datasock(self):
+      self.logger.info("Starting datasock")
       if self.pasv_mode:
         self.datasock, addr = self.servsock.accept()
         print 'connect:', addr
@@ -51,6 +53,7 @@ class FTPserverThread(threading.Thread):
         self.datasock.connect((self.dataAddr,self.dataPort))
 
     def stop_datasock(self):
+      self.logger.info("Closing datasock")
       self.datasock.close()
       if self.pasv_mode:
         self.servsock.close()
@@ -62,37 +65,47 @@ class FTPserverThread(threading.Thread):
       if cmd[5:-2].upper()=='UTF8 ON':
         self.conn.send('200 OK.\r\n')
       else:
+        self.logger.info("Tried to change from UTF8 ON")
         self.conn.send('451 Sorry.\r\n')
 
     def USER(self,cmd):
       self.user_name = cmd[5:-2]
+      self.logger.info("(%s) started authentication", self.user_name)
       self.conn.send('331 OK.\r\n')
 
     def PASS(self,cmd):
       if self.auth.isValid(self.user_name, cmd[5:-2]):
+        self.logger = self.logger.getLogger(self.user_name)
+        self.logger.info("Authenticated")
         self.conn.send('230 OK.\r\n')
       else:
+        self.logger.info("Failed to authenticate (%s)", self.user_name)
         self.conn.send('530 Incorrect.\r\n')
 
     def QUIT(self,cmd):
+      self.logger.info("Disconnected")
       self.conn.send('221 Goodbye.\r\n')
 
     def NOOP(self,cmd):
+      self.logger.info("NOOP")
       self.conn.send('200 OK.\r\n')
 
     def TYPE(self,cmd):
       self.mode=cmd[5]
+      self.logger.info("Mode %s", self.mode)
       self.conn.send( '200 Mode now {0}\r\n'.format(self.mode) )
 
     def CDUP(self,cmd):
+      self.logger.info("CDUP not implemented")
       self.conn.send('502 Not implemented yet.\r\n')
 
     def PWD(self,cmd):
+      self.logger.info("PWD: %s", self.state.cwd_path)
       self.conn.send('257 \"%s\"\r\n' % self.state.cwd_path)
 
     def CWD(self,cmd):
       path=cmd[4:-2]
-
+      self.logger.info("CD to %s", path)
       if path[0:3] == 'id=':
         id = path[3:]
         if self.drive.exists(id):
@@ -115,6 +128,7 @@ class FTPserverThread(threading.Thread):
         self.conn.send('550 Unable to find directory \"%s\"\r\n' % path)
 
     def EPRT(self,cmd):
+      self.logger.info("EPRT not implemented")
       self.conn.send('502 Not implemented yet.\r\n')
 
     def PORT(self,cmd):
@@ -137,10 +151,12 @@ class FTPserverThread(threading.Thread):
               (','.join(ip.split('.')), port>>8&0xFF, port&0xFF))
 
     def NLST(self,cmd):
+      self.logger.info("NLIST")
       self.LIST(cmd)
 
     def LIST(self,cmd):
       parameter = cmd[4:-2].strip()
+      self.logger.info("LIST %s", parameter)
       self.conn.send('150 Here comes the directory listing.\r\n')
 
       dir_id = parameter[3:] if parameter[0:3] == 'id=' else self.state.cwd_id
@@ -195,31 +211,35 @@ class FTPserverThread(threading.Thread):
 
     def RMD(self,cmd):
       folder_name = cmd[4:-2]
-
+      self.logger.info("RMD %s", folder_name)
       if not self.allow_delete:
+        self.logger.info("Delete not allowed, %s", folder_name)
         self.conn.send('450 Not allowed.\r\n')
         return
 
       if folder_name[0:3] == 'id=':
         id = folder_name[3:]
         self.drive.delete(id)
+        self.logger.info("Deleted %s directory", id)
         self.conn.send('250 Directory deleted.\r\n')
         return
 
       folder_id = self.drive.getFolderByPath(folder_name, self.state.cwd_id).id
 
       if folder_id == None:
+        self.logger.info("Unable to find folder %s", folder_name)
         self.conn.send('550 Unable to find folder.\r\n')
         return
 
       self.drive.delete(folder_id)
-
+      self.logger.info("Directory deleted %s (%s)", folder_name, folder_id)
       self.conn.send('250 Directory deleted.\r\n')
 
     def DELE(self,cmd):
       parameter = cmd[5:-2]
-
+      
       if not self.allow_delete:
+        self.logger.info("Delete not allowed, %s", parameter)
         self.conn.send('450 Not allowed.\r\n')
         return
 
@@ -333,8 +353,9 @@ class FTPserverThread(threading.Thread):
       self.conn.send('226 Drive Transfer complete.\r\n')
 
 class FTPserver(threading.Thread):
-  def __init__(self, drive, config):
+  def __init__(self, drive, config, logger):
     self.drive = drive
+    self.logger = logger
     self.config = config['ftp']
     self.auth = Auth(config['users'])
     self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -346,7 +367,7 @@ class FTPserver(threading.Thread):
     while True:
       ftp_state = FTPstate(self.drive.getRoot())
 
-      th=FTPserverThread(self.sock.accept(), self.drive, ftp_state, self.auth, self.config)
+      th=FTPserverThread(self.sock.accept(), self.drive, ftp_state, self.auth, self.config, self.logger)
       th.daemon=True
       th.start()
 

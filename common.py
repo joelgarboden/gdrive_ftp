@@ -1,5 +1,7 @@
 from datetime import datetime
 import json
+import logging
+import sys
 
 class GDrive_File(object):
   def __init__(self, name=None, id=None, mimeType=None, size=None, parents=None, createdTime=None):
@@ -50,10 +52,16 @@ class FakeBytesIO(object):
     return_data = self.data
     self.data = None
     return return_data
-    
+
   def tell(self):
     return self.total_bytes
 
 def getConfig(config_file='config.json'):
     with open(config_file) as json_config_file:
       return json.load(json_config_file)
+
+def getLogger(config, level=logging.INFO):
+  log_file = config['logging']['file']
+  logging.basicConfig( filename=log_file, level=level )
+  logging.getLogger().addHandler(logging.StreamHandler())
+  return logging

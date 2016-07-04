@@ -1,5 +1,6 @@
 {
   "logging": {
+    "file": "/var/log/gdrive_ftp.log"
   },
   "drive": {
     "client_secrets": "./client_secret.json",
