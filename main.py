@@ -4,8 +4,6 @@ import ftpserver
 from drive import GDrive
 import common
 
-#TODO Logging
-
 if __name__=='__main__':
   config = common.getConfig()
   logger = common.getLogger(config)
