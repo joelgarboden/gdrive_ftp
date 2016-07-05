@@ -1,28 +1,28 @@
 #!/usr/bin/env python2
 # https://gist.github.com/scturtle/1035886
 
-import os,socket,threading,time
+import os,socket,threading,time,sys,traceback,ssl
 from pprint import pprint
 from io import BytesIO
-import sys
-import traceback
-import threading
 
 from common import FTPstate
 from auth import Auth
 
 class FTPserverThread(threading.Thread):
-    def __init__(self,(conn,addr), drive, state, auth, config, parent_logger):
+    def __init__(self, conn, addr, drive, state, auth, config, parent_logger):
       self.conn=conn
       self.addr=addr
+      self.secure_conn = None
+      self.secure_addr = None
       self.drive=drive
       self.state=state
       self.mode='I'
+      self.encryption_kind = None
+
       self.logger = parent_logger
       self.auth = auth
       self.config = config
       self.allow_delete = config['allow_delete']
-
       self.user_name = ''
       self.rest=False
       self.pasv_mode=False
@@ -30,12 +30,29 @@ class FTPserverThread(threading.Thread):
 
     def run(self):
       self.conn.send('220 Welcome!\r\n')
-      while True:
 
-        cmd=self.conn.recv(256)
+      while True:
+        self.logger.info("IO Loop start")
+        if self.encryption_kind != None and self.secure_conn == None:
+          self.logger.info("Initializing secure connection")
+          self.secure_conn = ssl.wrap_socket(self.conn,
+                                              server_side=True,
+                                              ssl_version=ssl.PROTOCOL_SSLv23,
+                                              certfile="my.crt",
+                                              keyfile="my.key",
+                                              ciphers="AES256-GCM-SHA384")
+
+        if self.encryption_kind == None:
+          cmd=self.conn.recv(256)
+          self.logger.info("Insecure cmd (%s)", cmd.strip())
+        else:
+          self.logger.info("Reading from secure_conn")
+          cmd=self.secure_conn.read(256)
+          self.logger.info("Secure cmd (%s)", cmd.strip())
+
         if not cmd: break
         else:
-          self.logger.debug("Received (%s)", cmd)
+          self.logger.info("Received (%s)", cmd.strip())
           try:
             func=getattr(self,cmd[:4].strip().upper())
             func(cmd)
@@ -62,6 +79,11 @@ class FTPserverThread(threading.Thread):
     def SYST(self,cmd):
       self.conn.send('215 UNIX Type: L8\r\n')
 
+    def AUTH(self,cmd):
+      self.encryption_kind = cmd[4:-2].strip()
+      self.logger.info("Encryption now %s", self.encryption_kind)
+      self.conn.send('200 OK.\r\n')
+
     def OPTS(self,cmd):
       if cmd[5:-2].upper()=='UTF8 ON':
         self.conn.send('200 OK.\r\n')
@@ -86,6 +108,8 @@ class FTPserverThread(threading.Thread):
     def QUIT(self,cmd):
       self.logger.info("Disconnected")
       self.conn.send('221 Goodbye.\r\n')
+      if self.secure_conn:
+        self.secure_conn.close()
 
     def NOOP(self,cmd):
       self.logger.info("NOOP")
@@ -391,8 +415,8 @@ class FTPserver(threading.Thread):
     self.sock.listen(5)
     while True:
       ftp_state = FTPstate(self.drive.getRoot())
-
-      th=FTPserverThread(self.sock.accept(), self.drive, ftp_state, self.auth, self.config, self.logger)
+      conn, addr = self.sock.accept()
+      th=FTPserverThread(conn, addr, self.drive, ftp_state, self.auth, self.config, self.logger)
       th.daemon=True
       th.start()
 
