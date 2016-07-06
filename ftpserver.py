@@ -41,7 +41,7 @@ class FTPserverThread(threading.Thread):
             func(cmd)
           except Exception,e:
             traceback.print_exc()
-            self.logger.exception("Exception, %s", e)
+            #self.logger.exception("Exception, %s", e)
             self.conn.send('500 Unexpected error.\r\n')
 
     def start_datasock(self):

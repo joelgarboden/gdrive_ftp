@@ -9,7 +9,7 @@ from oauth2client import client, tools
 from mimetypes import guess_type
 from apiclient.http import MediaIoBaseUpload, MediaIoBaseDownload
 from googleapiclient.errors import HttpError
-from common import GDrive_File, FakeBytesIO
+from common import GDrive_File, FakeBytesIO, NoneFunc
 from streaming_http import StreamingHttpRequest
 
 class GDrive(object):
@@ -166,13 +166,8 @@ class GDrive(object):
 
     mimeType = 'application/octet-stream' if mode == 'I' else 'text/plain'
     ftp_data_stream = BytesIO()
-    while True:
-      data=datasock.recv(self.config['chunk_size'])
-      if not data: break
-      ftp_data_stream.write(data)
 
-    self.logger.info('Memory buffer complete, uploading %s bytes to Drive', ftp_data_stream.seek(0, 2))
-
+    #self.logger.info('Memory buffer complete, uploading %s bytes to Drive', ftp_data_stream.seek(0, 2))
     media = MediaIoBaseUpload(ftp_data_stream, mimetype=mimeType, chunksize=self.config['chunk_size'], resumable=True)
     request = service.files().create(body=body, media_body=media)
 
@@ -187,6 +182,15 @@ class GDrive(object):
 
     response = None
     while response is None:
+      data=datasock.recv(self.config['chunk_size'])
+      if not data:
+        print "No data, breaking"
+        break
+
+      ftp_data_stream.write(data)
+      print "Normal size", new_request.resumable.size()
+      new_request.resumable._size += len(data)
+      print "Increased size", new_request.resumable.size()
       status, response = new_request.next_chunk()
       if status:
         self.logger.info("Uploaded %s: %d%%.", filename, int(status.progress() * 100))

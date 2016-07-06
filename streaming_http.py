@@ -45,12 +45,16 @@ class StreamingHttpRequest(old_http):
     else:
       size = str(self.resumable.size())
 
+    print "next_chunk size", size
+
     if self.resumable_uri is None:
       start_headers = copy.copy(self.headers)
       start_headers['X-Upload-Content-Type'] = self.resumable.mimetype()
       if size != '*':
+        print "X-Upload-Content-Length", size
         start_headers['X-Upload-Content-Length'] = size
       start_headers['content-length'] = str(self.body_size)
+      print "content-length self.body_size", self.body_size
 
       resp, content = _retry_request(
           http, num_retries, 'resumable URI request', self._sleep, self._rand,
@@ -81,20 +85,22 @@ class StreamingHttpRequest(old_http):
         data.seek(self.resumable_progress)
         chunk_end = self.resumable.size() - self.resumable_progress - 1
       else:
+        print("Doing chunking with a stream, so wrap a slice of the stream.")
         # Doing chunking with a stream, so wrap a slice of the stream.
         data = _StreamSlice(data, self.resumable_progress,
                             self.resumable.chunksize())
-        chunk_end = min(
-            self.resumable_progress + self.resumable.chunksize() - 1,
-            self.resumable.size() - 1)
+        chunk_end = min(self.resumable_progress + self.resumable.chunksize() - 1,
+                        self.resumable.size() - 1)
+        print "Chunk end", chunk_end
     else:
       data = self.resumable.getbytes(self.resumable_progress, self.resumable.chunksize())
-
+      print "Not stream"
       # A short read implies that we are at EOF, so finish the upload.
       if len(data) < self.resumable.chunksize():
         size = str(self.resumable_progress + len(data))
-
+        print "Short read", size
       chunk_end = self.resumable_progress + len(data) - 1
+      print "Chunk end", chunk_end
 
     headers = {
         'Content-Range': 'bytes %d-%d/%s' % ( self.resumable_progress, chunk_end, size),
@@ -102,6 +108,7 @@ class StreamingHttpRequest(old_http):
         # calculate the size when working with _StreamSlice.
         'Content-Length': str(chunk_end - self.resumable_progress + 1)
         }
+    print "next_chunk headers", headers
 
     for retry_num in range(num_retries + 1):
       if retry_num > 0:
