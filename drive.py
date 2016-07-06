@@ -10,6 +10,7 @@ from mimetypes import guess_type
 from apiclient.http import MediaIoBaseUpload, MediaIoBaseDownload
 from googleapiclient.errors import HttpError
 from common import GDrive_File, FakeBytesIO
+from streaming_http import StreamingHttpRequest
 
 class GDrive(object):
   def __init__(self, config, parent_logger):
@@ -168,9 +169,18 @@ class GDrive(object):
     media = MediaIoBaseUpload(bytesio, mimetype=mimeType, chunksize=self.config['chunk_size'], resumable=True)
     request = service.files().create(body=body, media_body=media)
 
+    new_request = StreamingHttpRequest(request.http,
+                                        request.postproc,
+                                        request.uri, 
+                                        method=request.method,
+                                        body=request.body,
+                                        headers=request.headers,
+                                        methodId=request.methodId,
+                                        resumable=request.resumable)
+
     response = None
     while response is None:
-      status, response = request.next_chunk()
+      status, response = new_request.next_chunk()
       if status:
         self.logger.info("Uploaded %s: %d%%.", filename, int(status.progress() * 100))
     self.logger.info("Upload Complete %s", filename)
