@@ -154,7 +154,7 @@ class GDrive(object):
         createdTime=item['createdTime']
       )
 
-  def uploadFile(self, bytesio, dir_id, filename, mode):
+  def uploadFile(self, datasock, dir_id, filename, mode):
     credentials = self.get_credentials()
     http = credentials.authorize(httplib2.Http())
     service = discovery.build('drive', 'v3', http=http)
@@ -165,13 +165,20 @@ class GDrive(object):
     }
 
     mimeType = 'application/octet-stream' if mode == 'I' else 'text/plain'
+    ftp_data_stream = BytesIO()
+    while True:
+      data=datasock.recv(self.config['chunk_size'])
+      if not data: break
+      ftp_data_stream.write(data)
 
-    media = MediaIoBaseUpload(bytesio, mimetype=mimeType, chunksize=self.config['chunk_size'], resumable=True)
+    self.logger.info('Memory buffer complete, uploading %s bytes to Drive', ftp_data_stream.seek(0, 2))
+
+    media = MediaIoBaseUpload(ftp_data_stream, mimetype=mimeType, chunksize=self.config['chunk_size'], resumable=True)
     request = service.files().create(body=body, media_body=media)
 
     new_request = StreamingHttpRequest(request.http,
                                         request.postproc,
-                                        request.uri, 
+                                        request.uri,
                                         method=request.method,
                                         body=request.body,
                                         headers=request.headers,

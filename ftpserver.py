@@ -361,18 +361,9 @@ class FTPserverThread(threading.Thread):
         self.logger.info("Unable to find folder %s", destination_path)
         return
 
-      #TODO move to drive.py
-      ftp_data_stream = BytesIO()
-      while True:
-        data=self.datasock.recv(self.config['chunk_size'])
-        if not data: break
-        #TODO Write to GDrive directly. TL;DR, can't without a lot of rewrite.
-        ftp_data_stream.write(data)
+      self.drive.uploadFile(self.datasock, dest_folder_id, file_name, self.mode)
 
       self.stop_datasock()
-
-      self.logger.info('Memory buffer complete, uploading %s bytes to Drive', ftp_data_stream.seek(0, 2))
-      self.drive.uploadFile(ftp_data_stream, dest_folder_id, file_name, self.mode)
 
       self.logger.info("Drive transfer complete")
       self.conn.send('226 Drive Transfer complete.\r\n')

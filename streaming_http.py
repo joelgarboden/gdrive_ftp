@@ -88,8 +88,7 @@ class StreamingHttpRequest(old_http):
             self.resumable_progress + self.resumable.chunksize() - 1,
             self.resumable.size() - 1)
     else:
-      data = self.resumable.getbytes(
-          self.resumable_progress, self.resumable.chunksize())
+      data = self.resumable.getbytes(self.resumable_progress, self.resumable.chunksize())
 
       # A short read implies that we are at EOF, so finish the upload.
       if len(data) < self.resumable.chunksize():
@@ -98,8 +97,7 @@ class StreamingHttpRequest(old_http):
       chunk_end = self.resumable_progress + len(data) - 1
 
     headers = {
-        'Content-Range': 'bytes %d-%d/%s' % (
-            self.resumable_progress, chunk_end, size),
+        'Content-Range': 'bytes %d-%d/%s' % ( self.resumable_progress, chunk_end, size),
         # Must set the content-length header here because httplib can't
         # calculate the size when working with _StreamSlice.
         'Content-Length': str(chunk_end - self.resumable_progress + 1)
